@@ -133,7 +133,7 @@ func dispatch(cmd string, flags Flags, args []string) int {
 	case "install":
 		return cmdInstall(flags, args)
 	case "ood":
-		return cmdStub("ood", flags, args)
+		return cmdOod(flags, args)
 	case "affects":
 		return cmdStub("affects", flags, args)
 	case "sources":
