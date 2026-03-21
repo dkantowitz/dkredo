@@ -129,7 +129,7 @@ func dispatch(cmd string, flags Flags, args []string) int {
 	case "stamp":
 		return cmdStub("stamp", flags, args)
 	case "always":
-		return cmdStub("always", flags, args)
+		return cmdAlways(flags, args)
 	case "install":
 		return cmdInstall(flags, args)
 	case "ood":
