@@ -125,7 +125,7 @@ func parseFlags(args []string) (Flags, []string, string) {
 func dispatch(cmd string, flags Flags, args []string) int {
 	switch cmd {
 	case "ifchange":
-		return cmdStub("ifchange", flags, args)
+		return cmdIfchange(flags, args)
 	case "stamp":
 		return cmdStamp(flags, args)
 	case "always":
