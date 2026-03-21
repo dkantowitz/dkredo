@@ -35,8 +35,8 @@ code snippets where helpful.
 
 ### RED
 
-```cpp
-TEST_CASE("Description of expected behavior") {
+```go
+func TestDescriptionOfExpectedBehavior(t *testing.T) {
     // Setup and assertions
 }
 ```
