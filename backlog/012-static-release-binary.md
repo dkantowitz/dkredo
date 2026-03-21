@@ -9,22 +9,19 @@ created_date: 2026-03-21
 labels: [feature, core]
 swimlane: Tooling/Claude Environment
 phase: 4
-depends_on: ["011"]
+depends_on: ["008", "009", "010"]
 source_file: dk-redo-implementation.md:215
 ---
 
 ## Summary
 
 Add a `just release` target that produces statically linked binaries for
-linux/amd64 and windows/amd64. Include symlink creation in an install script.
+linux/amd64 and windows/amd64. macOS builds are optional.
 
 ## Current State
 
 `just build` produces a local binary. Cross-compilation and release packaging
-are not yet set up. Build command per `dk-redo-implementation.md:215-219`:
-```bash
-CGO_ENABLED=0 go build -ldflags="-s -w" -o dk-redo ./cmd/dk-redo
-```
+are not yet set up.
 
 ## Analysis & Recommendations
 
@@ -35,21 +32,26 @@ release:
     mkdir -p dist
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version={{version}}" -o dist/dk-redo-linux-amd64 ./cmd/dk-redo
     CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version={{version}}" -o dist/dk-redo-windows-amd64.exe ./cmd/dk-redo
+
+release-macos:
+    mkdir -p dist
     CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version={{version}}" -o dist/dk-redo-darwin-amd64 ./cmd/dk-redo
     CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version={{version}}" -o dist/dk-redo-darwin-arm64 ./cmd/dk-redo
 ```
 
 Version should come from git: `git describe --tags --always --dirty`.
 
-Include an `install.sh` script that:
-1. Copies the binary to a user-specified prefix (default `/usr/local/bin`)
-2. Creates symlinks: dk-ifchange, dk-stamp, dk-always, dk-ood, dk-affects,
-   dk-dot, dk-sources
+**No install.sh.** Installation is handled by the `dk-redo install <dest-path>`
+subcommand (ticket 007), which copies the binary and creates all symlinks.
+A separate shell script is unnecessary — the binary installs itself.
 
 Add `dist/` to `.gitignore`.
 
 Verify linux binary is truly static: `file dist/dk-redo-linux-amd64` should
 show "statically linked". Expected size ~3-4MB per implementation doc.
+
+macOS builds are in a separate `release-macos` target since they are optional
+and not all build environments support darwin cross-compilation.
 
 ## TDD Plan
 
@@ -66,16 +68,18 @@ func TestVersionFlag(t *testing.T) {
     // Assert: prints version string
 }
 
-func TestSymlinkDispatch(t *testing.T) {
-    // Create symlinks, invoke via symlink, verify correct command runs
+func TestInstallSubcommand(t *testing.T) {
+    // Run: dk-redo install <temp-dir>
+    // Assert: binary copied, all symlinks created
+    // Assert: symlinks point to dk-redo
 }
 ```
 
 ### GREEN
 
 1. Add `version` variable to justfile (from `git describe`)
-2. Add `release` target with cross-compilation
-3. Write `install.sh` with symlink creation
+2. Add `release` target with linux/windows cross-compilation
+3. Add `release-macos` target (optional)
 4. Add `dist/` to `.gitignore`
 5. Verify `just release` produces working binaries
 

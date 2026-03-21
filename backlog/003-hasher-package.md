@@ -1,6 +1,6 @@
 ---
 id: "003"
-title: Implement hasher package for BLAKE3 file/dir/stdin hashing
+title: Implement hasher package for BLAKE3 file/dir hashing
 status: To Do
 priority: 2
 effort: Medium
@@ -9,36 +9,38 @@ created_date: 2026-03-21
 labels: [feature, core]
 swimlane: Core Library
 phase: 2
-depends_on: ["001", "002"]
+depends_on: ["001"]
 source_file: dk-redo-implementation.md:128
 ---
 
 ## Summary
 
 Implement `internal/hasher/` — the package responsible for computing BLAKE3
-hashes of files, directories, and stdin streams. This is the core change
-detection primitive that stamp and ifchange depend on.
+hashes of files and directories. This is the core change detection primitive
+that stamp and ifchange depend on.
+
+**Note:** `ReadStdin` (reading file paths from stdin) is NOT in this package.
+It is a path-parsing function that belongs in the `resolve` package (ticket
+006). The hasher package only deals with computing hashes of file content.
 
 ## Current State
 
-Package exists as a placeholder from ticket 001. Test cases exist from ticket 002
-(currently skipped). No implementation.
+Package exists as a placeholder from ticket 001. No implementation.
 
 ## Analysis & Recommendations
 
-The package needs three primary functions per `dk-redo-implementation.md:128-141`:
+The package needs two primary functions per `dk-redo-implementation.md:128-141`:
 
 ```go
 // HashFile returns per-file facts for a single file path.
+// Symlinks are followed — the hash reflects the target content.
 // Returns "blake3:<hex> size:<n>" for existing files, "missing:true" for absent files.
 func HashFile(path string) (Facts, error)
 
 // HashDir walks a directory recursively, hashing all files.
+// Symlinks are followed. Circular symlink loops are detected and reported as errors.
 // Returns a sorted list of (path, Facts) pairs.
 func HashDir(dirPath string) ([]FileFacts, error)
-
-// ReadStdin reads file paths from stdin (newline or null-terminated).
-func ReadStdin(r io.Reader, nullTerminated bool) ([]string, error)
 ```
 
 Key types:
@@ -60,36 +62,67 @@ BLAKE3 usage: `github.com/zeebo/blake3` — hash raw file bytes, produce
 256-bit (64 hex char) digest.
 
 Directory hashing: walk recursively with `filepath.WalkDir`, collect files
-only (skip dirs/symlinks to dirs), sort lexically by path, hash each file.
-Detect symlink loops by checking for `fs.ErrPermission` or stat errors.
+only (skip dirs), **follow symlinks**, sort lexically by path, hash each file.
+Detect symlink loops by tracking visited inodes or real paths.
 
-Size fast path: `Facts` always includes both hash and size. The caller
-(stamp comparison) uses size for fast-path rejection before comparing hashes.
+**Symlinks are followed.** Both `HashFile` and `HashDir` follow symbolic links
+to hash the target content. This matches what the build would see — the hash
+should reflect the actual data, not the link itself.
+
+**Size is always recorded alongside the hash.** The caller (stamp comparison)
+uses size for fast-path rejection: if size differs, skip the expensive hash
+comparison. The hasher computes both in a single pass (stat for size, read
+for hash).
 
 ## TDD Plan
 
 ### RED
 
-Tests from ticket 002 in `internal/hasher/hasher_test.go`:
-- `TestHashFile/with_content` — deterministic BLAKE3 + correct size
-- `TestHashFile/empty_file` — BLAKE3 of empty + size:0
-- `TestHashFile/missing_file` — `Facts{Missing: true}`
-- `TestHashFile/permission_denied` — returns error
-- `TestHashDir/empty_dir` — returns empty list
-- `TestHashDir/with_files` — sorted list, hashes change on modification
-- `TestHashDir/determinism` — same files in different creation order → same result
-- `TestHashDir/symlink_loop` — error, not infinite loop
-- `TestReadStdin/newline` — parses "a.c\nb.c\n" → ["a.c", "b.c"]
-- `TestReadStdin/null` — parses "a.c\0b.c\0" → ["a.c", "b.c"]
-- `TestReadStdin/empty` — returns empty list
+```go
+func TestHashFile(t *testing.T) {
+    tests := []struct {
+        name        string
+        setup       func(t *testing.T, dir string) string // returns path
+        wantErr     bool
+        wantMissing bool
+        wantSize    int64
+    }{
+        {"with content", createFile("hello"), false, false, 5},
+        {"empty file", createFile(""), false, false, 0},
+        {"missing file", returnPath("nonexistent"), false, true, -1},
+        {"permission denied", createUnreadable(), true, false, 0},
+        {"follows symlink", createSymlink("hello"), false, false, 5},
+    }
+    // ...
+}
+
+func TestHashDir(t *testing.T) {
+    tests := []struct {
+        name    string
+        // ...
+    }{
+        {"empty dir"},
+        {"with files - sorted list, hashes change on modification"},
+        {"determinism - same files, different creation order, same result"},
+        {"follows symlinks - symlinked file hashed by target content"},
+        {"symlink loop - error, not infinite loop"},
+    }
+    // ...
+}
+
+func TestHashFileSizeBeforeHash(t *testing.T) {
+    // Verify that Facts always contains size alongside blake3.
+    // This enables the caller to do size-first comparison.
+}
+```
 
 ### GREEN
 
 1. Implement `Facts` and `FileFacts` types
-2. Implement `HashFile` using `zeebo/blake3`
-3. Implement `HashDir` using `filepath.WalkDir`
-4. Implement `ReadStdin` using `bufio.Scanner` with custom split
-5. Remove `t.Skip` from hasher tests, verify all pass
+2. Implement `HashFile` using `zeebo/blake3`, following symlinks
+3. Implement `HashDir` using `filepath.WalkDir`, following symlinks,
+   detecting circular loops
+4. Verify all tests pass
 
 ### REFACTOR
 

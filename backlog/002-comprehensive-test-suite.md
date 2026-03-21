@@ -1,13 +1,13 @@
 ---
 id: "002"
-title: Build comprehensive test suite with table-driven tests
+title: Test infrastructure and helpers
 status: To Do
 priority: 1
-effort: Medium
+effort: Small
 assignee: claude
 created_date: 2026-03-21
 labels: [feature, core]
-swimlane: Core Library
+swimlane: Tooling/Claude Environment
 phase: 1
 depends_on: ["001"]
 source_file: dk-redo-implementation.md:126
@@ -15,10 +15,10 @@ source_file: dk-redo-implementation.md:126
 
 ## Summary
 
-Create the full test scaffolding with table-driven test stubs for all three
-internal packages (hasher, stamp, resolve) and integration tests for the
-compiled binary. Tests should be written RED first — they define the contract
-that implementation tickets will make pass.
+Create shared test helpers and infrastructure used by all implementation
+tickets. This ticket does NOT write test stubs — each implementation ticket
+owns its own tests (RED phase). This ticket only provides the shared
+scaffolding.
 
 ## Current State
 
@@ -27,65 +27,49 @@ No tests exist. The test plan is fully specified in
 
 ## Analysis & Recommendations
 
-Write tests in three locations:
+**Why not pre-write all test stubs?** Writing test stubs before any
+implementation exists means guessing at function signatures, parameter types,
+and return types. Each implementation ticket already has its own TDD plan
+with a RED phase that defines tests. Pre-writing stubs creates duplicate work,
+merge conflicts, and signature churn as packages are implemented.
 
-1. `internal/hasher/hasher_test.go` — 11 test cases per implementation doc
-2. `internal/stamp/stamp_test.go` — 17 test cases per implementation doc
-3. `internal/resolve/resolve_test.go` — 7 test cases per implementation doc
-4. `test/integration_test.go` — 14 integration test cases (build tag: `integration`)
+This ticket creates only the shared infrastructure:
 
-Use Go table-driven test style (`[]struct{ name string; ... }`). Each test
-should have a clear name matching the "Test" column in the implementation doc.
+1. **Test helpers** in `internal/testutil/testutil.go`:
+   - `WriteTempFile(t, dir, name, content) string` — create a temp file, return path
+   - `WriteTempDir(t, dir, name, files map[string]string) string` — create dir with files
+   - `RunBinary(t, binary, stampsDir, args...) (stdout, stderr string, exitCode int)` — run compiled binary
 
-Integration tests should use `os/exec` to run the compiled `dk-redo` binary
-and check exit codes. They need a `TestMain` that builds the binary once into
-a temp directory before running tests.
+2. **Integration test skeleton** in `test/integration_test.go`:
+   - `TestMain` that builds the binary once into a temp directory
+   - Build tag `//go:build integration`
+   - Helper that wraps `RunBinary` with the pre-built binary path
 
-Use `t.TempDir()` for all file system operations — no test pollution.
+3. **Justfile updates**:
+   - `test-integration` passes `-tags integration` and builds binary first
+   - `test-bench` target: `go test -bench=. -benchtime=3s ./...`
 
-Helper functions to create:
-- `writeTempFile(t, dir, name, content) string` — create a temp file, return path
-- `writeTempDir(t, dir, name, files map[string]string) string` — create dir with files
-- `runDkRedo(t, args...) (stdout, stderr string, exitCode int)` — run binary
-
-All tests should initially fail (RED) or be marked with `t.Skip("not yet implemented")`
-until implementation tickets are completed.
+4. **Benchmark skeleton** in `test/bench_test.go`:
+   - Build tag `//go:build integration`
+   - Empty benchmark functions that implementation tickets will fill in
+   - Primary target: 300 files across 10 labels checked in < 300ms
 
 ## TDD Plan
 
 ### RED
 
-```go
-// internal/hasher/hasher_test.go
-func TestHashFile(t *testing.T) {
-    tests := []struct {
-        name     string
-        content  *string // nil means file doesn't exist
-        wantErr  bool
-        wantMissing bool
-    }{
-        {"with content", ptr("hello"), false, false},
-        {"empty file", ptr(""), false, false},
-        {"missing file", nil, false, true},
-    }
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            t.Skip("not yet implemented")
-        })
-    }
-}
-```
+No tests to write in RED — this ticket creates infrastructure only.
 
 ### GREEN
 
-1. Create test files with all table entries from implementation doc
-2. Write test helpers (temp file creation, binary runner)
-3. Add build tag `//go:build integration` to integration tests
-4. Update justfile: `test-integration` passes `-tags integration` and
-   builds the binary first
-5. Verify `just test` runs and all tests are skipped (not failing)
+1. Create `internal/testutil/testutil.go` with helper functions
+2. Create `test/integration_test.go` with `TestMain` and build step
+3. Create `test/bench_test.go` with benchmark skeleton
+4. Add `//go:build integration` tags
+5. Update justfile with `test-integration` and `test-bench` targets
+6. Verify `just test-unit` passes (no unit tests yet, but no failures)
+7. Verify `just test-integration` builds binary and runs (no tests yet)
 
 ### REFACTOR
 
-- Ensure test helper functions are in a shared `internal/testutil/` package
-  if needed across packages, or keep them local if only used in one package
+- Keep helpers minimal — only add what is actually needed by multiple packages

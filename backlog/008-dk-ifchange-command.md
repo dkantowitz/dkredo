@@ -31,14 +31,17 @@ Algorithm per `dk-redo-implementation.md:59-73`:
 
 ```
 1. Parse flags (-v, -q, -n), extract label (arg[0]) and inputs (arg[1:])
-2. Resolve inputs via resolve.Resolve()
-3. Hash all resolved files via hasher.HashFile/HashDir
-4. Read stamp file via stamp.Read()
-5. If no stamp exists: exit 0 (first run — changed)
-6. Compare stamp vs current facts via stamp.Compare()
-7. If changed: exit 0 (recipe continues)
-8. If unchanged: exit 1 (? sigil stops recipe)
-9. On error: exit 2
+2. Resolve inputs via resolve.Resolve() — stdin paths spliced at position
+3. If -n flag: exit 0 immediately (force changed — always rebuild)
+4. Hash all resolved files via hasher.HashFile/HashDir
+5. Read stamp file via stamp.Read()
+6. If no stamp exists: exit 0 (first run — changed)
+7. Compare stamp vs current facts via stamp.Compare()
+   - Returns CompareResult with Changed, ChangedFiles, Warnings
+   - Unknown fact keys → treated as changed, warning issued to stderr
+8. If changed: exit 0 (recipe continues)
+9. If unchanged: exit 1 (? sigil stops recipe)
+10. On error: exit 2
 ```
 
 Exit codes per `dk-redo.md:193-197`:
@@ -47,10 +50,18 @@ Exit codes per `dk-redo.md:193-197`:
 - `2` — error (corrupt stamp, I/O error)
 
 Flags specific to ifchange:
-- `-n` dry run: report but don't update state (rev1 just reports, stamp is
-  only written by dk-stamp anyway, so -n here means "don't exit 1, just report")
-- `-v` verbose: print which files changed
+- `-n` **force changed**: always exit 0, regardless of actual state.
+  Simulates a "force rebuild" for a single invocation without deleting the
+  stamp. The stamp is not modified. This is useful for testing/CI.
+- `-v` verbose: print which files changed (uses `CompareResult.ChangedFiles`)
 - `-q` quiet: suppress "up to date" message
+
+**All input modes must work:**
+- Positional file arguments
+- Directory arguments (hashed recursively)
+- `-` (stdin, newline-terminated)
+- `-0` (stdin, null-terminated)
+- Combinations: `dk-ifchange label blah.h - bar.h` (stdin spliced at position)
 
 ## TDD Plan
 
@@ -78,23 +89,49 @@ func TestIfchangeFileRemoved(t *testing.T) {
 }
 
 func TestIfchangeVerbose(t *testing.T) {
-    // -v flag prints changed file names
+    // -v flag prints changed file names and reasons
 }
 
-func TestIfchangeDryRun(t *testing.T) {
-    // -n flag reports without side effects
+func TestIfchangeForceChanged(t *testing.T) {
+    // -n flag → always exit 0, even if unchanged
+    // stamp is NOT modified
+}
+
+func TestIfchangeStdinNewline(t *testing.T) {
+    // dk-ifchange label - < file_list → reads from stdin
+}
+
+func TestIfchangeStdinNull(t *testing.T) {
+    // dk-ifchange label -0 < file_list → reads null-terminated
+}
+
+func TestIfchangeStdinCombined(t *testing.T) {
+    // dk-ifchange label a.c - b.c < stdin → stdin spliced at position
+}
+
+func TestIfchangeDirectoryInput(t *testing.T) {
+    // dk-ifchange label src/ → directory hashed recursively
+}
+
+func TestIfchangeUnknownFacts(t *testing.T) {
+    // Stamp with unknown fact keys → exit 0 (changed), warning on stderr
+}
+
+func TestIfchangeCorruptStamp(t *testing.T) {
+    // Corrupt stamp file → exit 0 (treated as changed, rebuild)
 }
 ```
 
 ### GREEN
 
-1. Implement `runIfchange()` function in `cmd/dk-redo/`
+1. Implement `runIfchange(args []string)` function in `cmd/dk-redo/`
 2. Wire flag parsing for `-v`, `-q`, `-n`
-3. Call resolve → hash → read stamp → compare pipeline
-4. Set exit code based on comparison result
-5. Implement verbose/quiet output formatting
+3. If `-n`: exit 0 immediately (force changed)
+4. Call resolve → hash → read stamp → compare pipeline
+5. Use `CompareResult` for exit code and verbose output
+6. Set exit code based on comparison result
 
 ### REFACTOR
 
 - Ensure error messages include the label for context
-- Consider structured output for `-v` (file path + reason for change)
+- Structured output for `-v` (file path + reason for change from CompareResult)

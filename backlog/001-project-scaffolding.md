@@ -30,7 +30,7 @@ Directory layout per `dk-redo-implementation.md:27`:
 ```
 cmd/dk-redo/main.go      — entry point (placeholder)
 internal/stamp/           — stamp read/write/compare
-internal/hasher/          — BLAKE3 file/dir/stdin hashing
+internal/hasher/          — BLAKE3 file/dir hashing
 internal/resolve/         — input argument resolution
 ```
 

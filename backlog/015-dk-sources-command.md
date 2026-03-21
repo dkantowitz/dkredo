@@ -2,14 +2,14 @@
 id: "015"
 title: Implement dk-sources command (list all tracked files)
 status: To Do
-priority: 5
+priority: 4
 effort: Trivial
 assignee: claude
 created_date: 2026-03-21
 labels: [enhancement, core]
 swimlane: Core Library
-phase: 5
-depends_on: ["008"]
+phase: 4
+depends_on: ["005", "007"]
 source_file: dk-redo.md:362
 ---
 
@@ -20,7 +20,8 @@ files across all stamps. Answers: "what files does dk-redo know about?"
 
 ## Current State
 
-Core commands implemented. Stamp reading exists.
+Stamp reading exists in `internal/stamp/` (ticket 005). CLI dispatch exists
+(ticket 007).
 
 ## Analysis & Recommendations
 
@@ -62,11 +63,11 @@ func TestSourcesVerbose(t *testing.T) {
 
 ### GREEN
 
-1. Implement `runSources()` function
+1. Implement `runSources(args []string)` function
 2. Scan stamps, collect all paths into a set
 3. Sort and print
 4. Verbose mode: build file→labels map
 
 ### REFACTOR
 
-- Share stamp scanning with dk-affects (both read all stamps)
+- Share stamp scanning with dk-affects, dk-ood, dk-dot

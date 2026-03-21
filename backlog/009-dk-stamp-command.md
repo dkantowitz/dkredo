@@ -28,7 +28,7 @@ Algorithm per `dk-redo-implementation.md:76-84`:
 
 ```
 1. Parse flags (--append, -v, -q), extract label and inputs
-2. Resolve inputs via resolve.Resolve()
+2. Resolve inputs via resolve.Resolve() — stdin paths spliced at position
 3. Hash all resolved files via hasher.HashFile/HashDir
 4. If --append: read existing stamp, merge via stamp.Append()
 5. Write stamp atomically via stamp.Write()
@@ -46,6 +46,13 @@ The `--append` flag per `dk-redo.md:222-240`:
 
 Non-existent input files per `dk-redo.md:262-267`:
 record `missing:true` (no hash or size). This enables the bootstrapping pattern.
+
+**All input modes must work and be tested:**
+- Positional file arguments
+- Directory arguments (hashed recursively)
+- `-` (stdin, newline-terminated)
+- `-0` (stdin, null-terminated)
+- Combinations: `dk-stamp label src/*.c - lib.c` (stdin spliced at position)
 
 ## TDD Plan
 
@@ -71,11 +78,35 @@ func TestStampMissingInput(t *testing.T) {
 func TestStampCreatesStampsDir(t *testing.T) {
     // .stamps/ auto-created if absent
 }
+
+func TestStampStdinNewline(t *testing.T) {
+    // dk-stamp label - < file_list → reads from stdin
+}
+
+func TestStampStdinNull(t *testing.T) {
+    // dk-stamp label -0 < file_list → reads null-terminated
+}
+
+func TestStampStdinCombined(t *testing.T) {
+    // dk-stamp label a.c - b.c < stdin → stdin spliced at position
+}
+
+func TestStampDirectoryInput(t *testing.T) {
+    // dk-stamp label src/ → directory hashed recursively
+}
+
+func TestStampMixedInputModes(t *testing.T) {
+    // dk-stamp label file.c dir/ - < stdin → all modes combined
+}
+
+func TestStampVerbose(t *testing.T) {
+    // -v prints stamp path and per-file facts
+}
 ```
 
 ### GREEN
 
-1. Implement `runStamp()` function in `cmd/dk-redo/`
+1. Implement `runStamp(args []string)` function in `cmd/dk-redo/`
 2. Wire flag parsing for `--append`, `-v`, `-q`
 3. Call resolve → hash → (optional read + append) → write pipeline
 4. Implement verbose output showing stamp path and per-file facts

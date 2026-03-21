@@ -2,14 +2,14 @@
 id: "016"
 title: Implement dk-dot command (Graphviz DOT output)
 status: To Do
-priority: 5
+priority: 4
 effort: Small
 assignee: claude
 created_date: 2026-03-21
 labels: [enhancement, core]
 swimlane: Core Library
-phase: 5
-depends_on: ["008"]
+phase: 4
+depends_on: ["005", "007"]
 source_file: dk-redo.md:344
 ---
 
@@ -21,7 +21,8 @@ visualization.
 
 ## Current State
 
-Core commands implemented. Stamp reading exists.
+Stamp reading exists in `internal/stamp/` (ticket 005). CLI dispatch exists
+(ticket 007).
 
 ## Analysis & Recommendations
 
@@ -75,7 +76,7 @@ func TestDotNoStamps(t *testing.T) {
 
 ### GREEN
 
-1. Implement `runDot()` function
+1. Implement `runDot(args []string)` function
 2. Read stamps (all or specified labels)
 3. Emit DOT header with rankdir
 4. For each stamp: emit edges from label to each input file
@@ -83,4 +84,4 @@ func TestDotNoStamps(t *testing.T) {
 
 ### REFACTOR
 
-- Add node styling (labels vs files could have different shapes)
+- Share stamp scanning with dk-affects, dk-ood, dk-sources

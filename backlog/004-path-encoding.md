@@ -9,7 +9,7 @@ created_date: 2026-03-21
 labels: [feature, core]
 swimlane: Core Library
 phase: 2
-depends_on: ["001", "002"]
+depends_on: ["001"]
 source_file: dk-redo-implementation.md:106
 ---
 
@@ -37,11 +37,22 @@ func EscapeLabel(label string) string {
 }
 
 func UnescapeLabel(escaped string) string {
+    // %2F first (special chars), then %25 (escape char last)
     escaped = strings.ReplaceAll(escaped, "%2F", "/")
     escaped = strings.ReplaceAll(escaped, "%25", "%")
     return escaped
 }
 ```
+
+**Why decode order matters for `UnescapeLabel`:** The `%` escape character
+must be decoded **last** during unescaping. If we decoded `%25` → `%` first,
+then a literal `%2F` in the original label would be incorrectly decoded:
+the original `foo%2Fbar` encodes to `foo%252Fbar`. If we decode `%25` first
+we get `foo%2Fbar`, and then decoding `%2F` gives `foo/bar` — wrong! By
+decoding `%2F` first (it stays as `%2F` since there's no raw `%2F` from a
+slash) and `%25` last, we correctly recover the original. This is standard
+percent-encoding decode order: decode special sequences first, then the
+escape character itself.
 
 **Path encoding** (path → stamp line):
 ```go
@@ -54,6 +65,7 @@ func EncodePath(path string) string {
 }
 
 func DecodePath(encoded string) string {
+    // special chars first, then %25 last
     encoded = strings.ReplaceAll(encoded, "%09", "\t")
     encoded = strings.ReplaceAll(encoded, "%0A", "\n")
     encoded = strings.ReplaceAll(encoded, "%25", "%")
@@ -77,6 +89,21 @@ func TestEscapeLabel(t *testing.T) {
         {"output/config.json", "output%2Fconfig.json"},
         {"100%done", "100%25done"},
         {"a/b%c/d", "a%2Fb%25c%2Fd"},
+        // double-encoding edge case: literal %2F in label
+        {"foo%2Fbar", "foo%252Fbar"},
+    }
+    // ...
+}
+
+func TestUnescapeLabel(t *testing.T) {
+    tests := []struct {
+        input, want string
+    }{
+        {"firmware.bin", "firmware.bin"},
+        {"output%2Fconfig.json", "output/config.json"},
+        {"100%25done", "100%done"},
+        // roundtrip of double-encoding: must recover literal %2F
+        {"foo%252Fbar", "foo%2Fbar"},
     }
     // ...
 }
@@ -91,6 +118,11 @@ func TestEncodePath(t *testing.T) {
     }
     // ...
 }
+
+func TestRoundtrip(t *testing.T) {
+    // Property: Unescape(Escape(x)) == x for all inputs
+    // Property: Decode(Encode(x)) == x for all inputs
+}
 ```
 
 ### GREEN
@@ -98,6 +130,7 @@ func TestEncodePath(t *testing.T) {
 1. Implement `EscapeLabel` / `UnescapeLabel` in `internal/stamp/encoding.go`
 2. Implement `EncodePath` / `DecodePath` in the same file
 3. Verify roundtrip: `Unescape(Escape(x)) == x` for all test cases
+4. Verify roundtrip: `Decode(Encode(x)) == x` for all test cases
 
 ### REFACTOR
 
