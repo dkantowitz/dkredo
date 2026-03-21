@@ -13,7 +13,7 @@ import (
 // WriteTempFile creates a file with the given name and content inside dir.
 // It returns the full path to the created file.
 // If dir is empty, t.TempDir() is used.
-func WriteTempFile(t *testing.T, dir, name, content string) string {
+func WriteTempFile(t testing.TB, dir, name, content string) string {
 	t.Helper()
 	if dir == "" {
 		dir = t.TempDir()
@@ -33,7 +33,7 @@ func WriteTempFile(t *testing.T, dir, name, content string) string {
 // populates it with the provided files (name -> content mapping).
 // It returns the full path to the created directory.
 // If dir is empty, t.TempDir() is used.
-func WriteTempDir(t *testing.T, dir, name string, files map[string]string) string {
+func WriteTempDir(t testing.TB, dir, name string, files map[string]string) string {
 	t.Helper()
 	if dir == "" {
 		dir = t.TempDir()
