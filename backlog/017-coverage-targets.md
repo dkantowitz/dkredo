@@ -145,6 +145,9 @@ No tests needed — this ticket adds measurement infrastructure.
 - `.gitignore` updated with `coverage.out` and `coverage.html`
 - `cover-check` uses awk to parse total coverage and compare against threshold
 
+### Bug fix
+- `cover-check` was failing because `internal/testutil` (0.0% — test infrastructure with no unit tests of its own) dragged the aggregate total to 77.0%. Fixed by excluding testutil from coverage measurement and switching to a shebang recipe for reliable `awk`/shell variable handling in justfile.
+
 ### Deferred work
 - **Phase 5 target: raise threshold from 80% to 95%** — requires additional tests for filesystem error paths in `stamp.Write` and `hasher.HashDir`
 - Per-package threshold checking not implemented — aggregate masking hasn't been a problem since all packages individually exceed 80%
