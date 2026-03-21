@@ -1,7 +1,8 @@
 ---
 id: "007"
 title: Implement argv[0] dispatch and CLI flag parsing
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 2
 effort: Small
 assignee: claude
@@ -145,3 +146,33 @@ func TestNoSubcommand(t *testing.T) {
 
 - Extract command registry into a map for cleaner dispatch
 - Ensure `--help` output is consistent across all commands
+
+## Completion Notes
+
+**Commit:** `8713b49`
+
+### Files modified
+- `cmd/dk-redo/main.go` (235 lines) — `main`, `resolveCommand`, `parseFlags`, `dispatch`, `usage`, `cmdInstall`, plus all command implementations
+- `cmd/dk-redo/main_test.go` (163 lines) — 21 tests
+
+### Test inventory (21 tests including subtests)
+- `TestResolveCommandSymlinkStyle`, `TestResolveCommandSubcommandStyle`
+- `TestResolveCommandNoSubcommand`, `TestResolveCommandInstallViaSubcommand`
+- `TestResolveCommandInstallViaSymlink`, `TestResolveCommandOtherSymlinks` (6 subtests)
+- `TestResolveCommandWithPath`
+- `TestParseFlagsVerbose`, `TestParseFlagsQuiet`, `TestParseFlagsStampsDir`
+- `TestParseFlagsHelp`, `TestParseFlagsVersion`, `TestParseFlagsDefault`
+- `TestDispatchUnknownCommand`, `TestDispatchKnownCommands`
+
+### Coverage
+- cmd/dk-redo: **10.8%** (expected — most logic is in command handlers that require real file I/O, tested via integration tests in ticket 011)
+
+### Design decisions
+- `resolveCommand` handles both symlink-style (`dk-ifchange`) and subcommand-style (`dk-redo ifchange`)
+- `install` only available via subcommand, not symlink dispatch
+- Shared `Flags` struct passed to all commands (not globals)
+- Version embedded via `-ldflags "-X main.version=..."` at build time
+- **Important:** subcommand must appear before `--stamps-dir` flag (e.g., `dk-redo ifchange --stamps-dir <path>`)
+
+### Deferred work
+- Per-command `--help` text not implemented — single `usage()` function covers all commands

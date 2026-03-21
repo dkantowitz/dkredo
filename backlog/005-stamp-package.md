@@ -1,7 +1,8 @@
 ---
 id: "005"
 title: Implement stamp package for read/write/compare/append
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 2
 effort: Medium
 assignee: claude
@@ -145,3 +146,31 @@ func TestLabelEscaping(t *testing.T)       // "output/config.json" → ".stamps/
 - Ensure error messages include the label for context
 - Verify that `Compare` result provides enough info for both `-v` output
   and `dk-ood` usage
+
+## Completion Notes
+
+**Commit:** `12e7de7`
+
+### Files modified
+- `internal/stamp/stamp.go` (324 lines) — `Read`, `Write`, `Compare`, `Append`, `FormatFacts`, `parseFacts`
+- `internal/stamp/stamp_test.go` (635 lines) — 30 top-level tests (49 including subtests)
+
+### Test inventory (30 top-level tests, 49 with subtests)
+- Read/Write: `TestWriteThenReadRoundtrip`, `TestWriteCreatesStampsDir`, `TestWriteIsAtomic`, `TestReadMissingStamp`, `TestReadCorruptStamp`, `TestReadAdversarialBinaryInput`, `TestReadAdversarialLongLine`, `TestReadEmptyStamp`
+- Compare: `TestCompareUnchanged`, `TestCompareChangedHash`, `TestCompareChangedFileList`, `TestCompareSizeFastPath`, `TestCompareMissingAppeared`, `TestCompareFileDisappeared`, `TestCompareMissingStillMissing`, `TestCompareUnknownFacts`
+- Append: `TestAppendMergesNewFiles`, `TestAppendUpdatesExistingFacts`, `TestAppendPreservesUnmentionedFiles`, `TestAppendWithMissingFile`, `TestAppendPreservesLabel`
+- Paths: `TestRoundtripWithSpacesInPaths`, `TestPathWithTabEncoded`, `TestPathWithPercentEncoded`, `TestLabelWithSlash`
+- Format: `TestFormatFacts` (2 subtests)
+
+### Coverage
+- **91.7%** statement coverage
+- `Read`: 92.6%, `Write`: 72.4%, `Compare`: 100%, `Append`: 100%, `FormatFacts`: 100%, `parseFacts`: 85.7%
+
+### Design decisions
+- `Compare` returns structured `CompareResult` (not bool) — used by ifchange `-v` and dk-ood
+- Atomic write via temp file + `os.Rename`
+- Corrupt/adversarial stamps return error (exit 2), empty stamps treated as valid (no files)
+- Unknown fact keys cause `Changed=true` with warning
+
+### Deferred work
+- `Write` coverage at 72.4% — the uncovered paths are error branches from `os.MkdirAll`, `os.CreateTemp`, and `os.Rename` that require simulating filesystem failures

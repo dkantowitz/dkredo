@@ -1,7 +1,8 @@
 ---
 id: "016"
 title: Implement dk-dot command (Graphviz DOT output)
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 4
 effort: Small
 assignee: claude
@@ -85,3 +86,21 @@ func TestDotNoStamps(t *testing.T) {
 ### REFACTOR
 
 - Share stamp scanning with dk-affects, dk-ood, dk-sources
+
+## Completion Notes
+
+**Commit:** `f2514d5`
+
+### Files modified
+- `cmd/dk-redo/main.go` — `cmdDot` function added (~40 lines)
+
+### Design decisions
+- Reads stamps (all or specified labels), emits Graphviz DOT directed graph
+- `rankdir=TB` by default, `--lr` flag switches to `rankdir=LR`
+- Node names are quoted to handle paths with special characters
+- Exit 0 = graph emitted, exit 2 = error or no stamps
+- Pipe output to `dot -Tsvg` or `dot -Tpng` for visualization
+
+### Deferred work
+- No dedicated integration tests for dk-dot
+- The `--lr` flag is parsed but not tested in integration tests

@@ -1,7 +1,8 @@
 ---
 id: "004"
 title: Implement label escaping and path percent-encoding
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 2
 effort: Trivial
 assignee: claude
@@ -135,3 +136,27 @@ func TestRoundtrip(t *testing.T) {
 ### REFACTOR
 
 - Property-based roundtrip test if `testing/quick` is worth it here
+
+## Completion Notes
+
+**Commit:** `085cf78`
+
+### Files modified
+- `internal/stamp/encoding.go` (37 lines) — `EscapeLabel`, `UnescapeLabel`, `EncodePath`, `DecodePath`
+- `internal/stamp/encoding_test.go` (103 lines) — 19 test cases
+
+### Test inventory (part of stamp package's 49 tests)
+- `TestEscapeLabel` (5 subtests), `TestUnescapeLabel` (4 subtests)
+- `TestEncodePath` (3 subtests), `TestDecodePath` (3 subtests)
+- `TestEscapeLabelRoundtrip`, `TestEncodePathRoundtrip`
+
+### Coverage
+- All four functions: **100%** statement coverage
+
+### Design decisions
+- Placed in `internal/stamp/encoding.go` (not a separate package) since only stamp uses these
+- Encode order: `%` first, then special chars. Decode order: special chars first, then `%` last
+- Double-encoding edge case verified: literal `%2F` in label roundtrips correctly
+
+### Deferred work
+- None. Property-based testing was considered but not added — the explicit roundtrip tests cover the critical edge cases (double-encoding, ordering).

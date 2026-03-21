@@ -1,7 +1,8 @@
 ---
 id: "011"
 title: Activate integration test suite against compiled binary
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 4
 effort: Medium
 assignee: claude
@@ -101,3 +102,52 @@ All tests from the table above should be implemented.
 
 - Factor out common patterns (create stamp then check) into helpers
 - Add timeout to binary execution to catch hangs
+
+## Completion Notes
+
+**Commit:** `afb1291`
+
+### Files modified
+- `test/integration_test.go` (518 lines) — 18 end-to-end tests
+- `test/bench_test.go` (133 lines) — 4 benchmark functions (8 sub-benchmarks)
+- `internal/testutil/testutil.go` — changed `WriteTempFile`/`WriteTempDir` parameter from `*testing.T` to `testing.TB`
+
+### Test inventory (18 integration tests)
+1. `TestFirstRun` — no stamps, ifchange exits 0
+2. `TestUnchanged` — stamp matches, ifchange exits 1
+3. `TestFileModified` — content changed, ifchange exits 0
+4. `TestFileAdded` — new file in args, exit 0
+5. `TestFileRemoved` — file removed from args, exit 0
+6. `TestDirFileAdded` — file added to tracked directory, exit 0
+7. `TestDirFileRemoved` — file removed from tracked directory, exit 0
+8. `TestMissingFileSentinel` — missing:true then file created, exit 0
+9. `TestStampReplace` — second stamp replaces first
+10. `TestStampAppend` — `--append` merges stamps
+11. `TestAlways` — dk-always removes stamp, forces rebuild
+12. `TestAlwaysAll` — `--all` removes all stamps
+13. `TestCorruptStamp` — binary/malformed stamps handled (exit 2 for corrupt, exit 0 for empty)
+14. `TestSubcommandStyle` — `dk-redo ifchange` works same as symlink
+15. `TestSymlinkStyle` — symlink dispatch works
+16. `TestLabelWithSlash` — label "a/b" produces stamp at `.stamps/a%2Fb`
+17. `TestForceChanged` — `-n` flag always exits 0
+18. `TestUnknownSymlink` — `dk-bogus` symlink exits 2 with usage
+
+### Benchmark inventory (4 functions)
+- `BenchmarkIfchangeUnchanged10` — 10 files, stamp exists
+- `BenchmarkIfchangeUnchanged300` — 300 files across 10 labels (30 each)
+- `BenchmarkStamp100` — 100 small files
+- `BenchmarkStartupOverhead` — `--help` invocation
+
+### Design decisions
+- `TestMain` builds the binary once into a temp directory before all tests
+- Each test creates its own temp directory with `.stamps/` and test files
+- `RunBinary` helper captures stdout, stderr, and exit code
+- Symlink tests create symlinks in temp dir pointing to the built binary
+
+### Key finding
+- The binary requires subcommand to appear before `--stamps-dir` (e.g., `dk-redo ifchange --stamps-dir <path>` not `dk-redo --stamps-dir <path> ifchange`)
+
+### Not implemented from spec
+- `TestStdinCombined` — stdin combined mode tested at resolve package level, not in integration tests
+- `TestUnknownFacts` — unknown fact keys tested at stamp package level
+- `TestAdversarialStamp` — covered by `TestCorruptStamp` (tests binary data and NUL bytes)

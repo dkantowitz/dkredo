@@ -1,7 +1,8 @@
 ---
 id: "014"
 title: Implement dk-affects command (reverse dependency query)
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 4
 effort: Small
 assignee: claude
@@ -108,3 +109,21 @@ func TestAffectsVerbose(t *testing.T) {
 ### REFACTOR
 
 - Share stamp scanning with dk-ood, dk-sources, dk-dot
+
+## Completion Notes
+
+**Commit:** `ac49b60`
+
+### Files modified
+- `cmd/dk-redo/main.go` — `cmdAffects` function added (~60 lines)
+
+### Design decisions
+- Resolves query files using `resolve.Resolve` (supports positional, `-`, `-0`, combinations)
+- Scans all stamps, checks if any queried file appears in each stamp's input list
+- Exit 0 = found affected labels, exit 1 = no labels depend on queried files
+- `-v` shows which input file triggered each label match
+- Path matching uses canonical paths (same as stamp storage)
+
+### Deferred work
+- `--json` output descoped to rev2 per spec
+- No dedicated unit tests — tested via stamp package tests and would benefit from integration test coverage

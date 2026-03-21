@@ -1,7 +1,8 @@
 ---
 id: "002"
 title: Test infrastructure and helpers
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 1
 effort: Small
 assignee: claude
@@ -73,3 +74,23 @@ No tests to write in RED — this ticket creates infrastructure only.
 ### REFACTOR
 
 - Keep helpers minimal — only add what is actually needed by multiple packages
+
+## Completion Notes
+
+**Commit:** `085cf78`
+
+### Files created
+- `internal/testutil/testutil.go` (90 lines) — `WriteTempFile`, `WriteTempDir`, `RunBinary` helpers
+- `test/integration_test.go` — skeleton with `TestMain` binary build, `//go:build integration` tag
+- `test/bench_test.go` — benchmark skeleton with `//go:build integration` tag
+
+### Justfile targets added
+- `test-integration`: builds binary then runs `go test -tags integration ./test/...`
+- `test-bench`: runs benchmarks with `-bench=. -benchtime=3s`
+
+### Design decisions
+- `WriteTempFile` and `WriteTempDir` accept `testing.TB` (not `*testing.T`) so they work in both tests and benchmarks
+- `RunBinary` captures stdout, stderr, and exit code via `os/exec`
+
+### Deferred work
+- None

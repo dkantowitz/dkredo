@@ -1,7 +1,8 @@
 ---
 id: "006"
 title: Implement resolve package for input argument resolution
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 2
 effort: Small
 assignee: claude
@@ -116,3 +117,28 @@ func TestReadStdin(t *testing.T) {
 
 - Consider whether resolve should return `[]string` or a richer type
   that preserves which args were directories (useful for `-v` output)
+
+## Completion Notes
+
+**Commit:** `e56054e`
+
+### Files modified
+- `internal/resolve/resolve.go` (110 lines) — `Resolve`, `ReadStdin`, `dedup`
+- `internal/resolve/resolve_test.go` (185 lines) — 15 test cases
+
+### Test inventory (15 tests including subtests)
+- `TestReadStdin` (5 subtests): newline terminated, null terminated, empty, no trailing delimiter, empty lines skipped
+- `TestResolve` (8 subtests): file args, dir arg, mixed files and dirs, stdin newline, stdin null, mixed with stdin at position, deduplication, stdin read only once
+
+### Coverage
+- **91.5%** statement coverage
+- `Resolve`: 92.0%, `ReadStdin`: 93.3%, `dedup`: 85.7%
+
+### Design decisions
+- Returns `[]string` (sorted, deduplicated paths) — simpler than a richer type; `-v` output handled at command level
+- Stdin is read once and spliced at the position of `-` or `-0` in the arg list
+- Directory expansion delegates to `filepath.WalkDir` (not hasher — avoids hashing just for path listing)
+- TTY detection for stdin not implemented (stdin is always consumed if `-`/`-0` present)
+
+### Deferred work
+- None. TTY detection was descoped — the command is designed for scripts, not interactive use.

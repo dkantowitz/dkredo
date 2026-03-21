@@ -1,7 +1,8 @@
 ---
 id: "008"
 title: Implement dk-ifchange command
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 3
 effort: Medium
 assignee: claude
@@ -135,3 +136,33 @@ func TestIfchangeCorruptStamp(t *testing.T) {
 
 - Ensure error messages include the label for context
 - Structured output for `-v` (file path + reason for change from CompareResult)
+
+## Completion Notes
+
+**Commit:** `5d1c392`
+
+### Files modified
+- `cmd/dk-redo/main.go` — `cmdIfchange` function added (~50 lines)
+
+### Unit tests
+- Tested via integration tests (ticket 011), not separate unit tests — the command is a thin orchestrator over resolve, hasher, stamp packages
+
+### Integration test coverage (from ticket 011)
+- `TestFirstRun` — no stamp, exit 0
+- `TestUnchanged` — stamp matches, exit 1
+- `TestFileModified` — content changed, exit 0
+- `TestFileAdded` — new file in args, exit 0
+- `TestFileRemoved` — file removed from args, exit 0
+- `TestDirFileAdded`, `TestDirFileRemoved` — directory expansion
+- `TestMissingFileSentinel` — missing:true then file appears
+- `TestForceChanged` — `-n` flag always exits 0
+- `TestCorruptStamp` — corrupt stamp treated as error (exit 2) or changed (exit 0)
+
+### Design decisions
+- Pipeline: parse flags → resolve inputs → hash files → read stamp → compare → exit code
+- `-n` (force changed) exits 0 immediately without reading stamp
+- Exit 0 = changed (recipe continues), exit 1 = unchanged (recipe stops), exit 2 = error
+- `-v` prints changed file names and reasons from `CompareResult.ChangedFiles`
+
+### Deferred work
+- Stdin input modes (`-`, `-0`) not tested in integration tests (tested at resolve package level)

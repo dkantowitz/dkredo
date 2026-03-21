@@ -1,7 +1,8 @@
 ---
 id: "017"
 title: Line and branch coverage targets with regression staking
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 3
 effort: Small
 assignee: claude
@@ -111,3 +112,39 @@ No tests needed — this ticket adds measurement infrastructure.
 
 - After phase 4: update `cover-check` threshold from 80 to 95
 - Add per-package threshold checking if aggregate masking becomes a problem
+
+## Completion Notes
+
+**Commit:** `f2514d5`
+
+### Files modified
+- `justfile` — added `cover`, `cover-html`, `cover-check` targets
+
+### Justfile targets added
+- `cover`: generates `coverage.out` and prints per-function coverage
+- `cover-html`: generates `coverage.html` for browser viewing
+- `cover-check`: fails build if aggregate internal coverage < 80%
+
+### Current coverage (internal packages only)
+
+| Package | Coverage | Notes |
+|---------|----------|-------|
+| `internal/hasher` | 80.4% | Uncovered: OS-level error paths in file I/O |
+| `internal/resolve` | 91.5% | Uncovered: edge cases in dedup |
+| `internal/stamp` | 91.7% | Uncovered: filesystem error paths in Write |
+| **Aggregate** | **89.3%** | **Exceeds 80% threshold** |
+
+### Per-function coverage highlights
+- `stamp.Compare`: 100%, `stamp.Append`: 100%, `stamp.FormatFacts`: 100%
+- All encoding functions: 100%
+- `stamp.Write`: 72.4% (filesystem error branches)
+- `hasher.HashDir`: 76.9% (symlink edge cases)
+
+### Design decisions
+- Coverage targets apply to `internal/` packages only (not `cmd/dk-redo/` which is tested via integration tests)
+- `.gitignore` updated with `coverage.out` and `coverage.html`
+- `cover-check` uses awk to parse total coverage and compare against threshold
+
+### Deferred work
+- **Phase 5 target: raise threshold from 80% to 95%** — requires additional tests for filesystem error paths in `stamp.Write` and `hasher.HashDir`
+- Per-package threshold checking not implemented — aggregate masking hasn't been a problem since all packages individually exceed 80%

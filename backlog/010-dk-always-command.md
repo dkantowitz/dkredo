@@ -1,7 +1,8 @@
 ---
 id: "010"
 title: Implement dk-always command
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 3
 effort: Trivial
 assignee: claude
@@ -81,3 +82,23 @@ func TestAlwaysLabelWithSlash(t *testing.T) {
 ### REFACTOR
 
 - Minimal — this command is intentionally simple
+
+## Completion Notes
+
+**Commit:** `d75d8a1`
+
+### Files modified
+- `cmd/dk-redo/main.go` — `cmdAlways` function added (~30 lines)
+
+### Integration test coverage (from ticket 011)
+- `TestAlways` — removes stamp, subsequent ifchange returns exit 0
+- `TestAlwaysAll` — `--all` removes all stamps
+
+### Design decisions
+- Uses `stamp.EscapeLabel` to compute stamp path
+- `--all` scans stamps directory and removes every file
+- Always exits 0, even if stamp didn't exist (no-op is not an error)
+
+### Deferred work
+- `-v` verbose output (listing removed stamps) not tested in integration tests
+- Labels with slashes tested via `TestLabelWithSlash` (exercises EscapeLabel path)

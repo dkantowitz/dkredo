@@ -1,7 +1,8 @@
 ---
 id: "015"
 title: Implement dk-sources command (list all tracked files)
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 4
 effort: Trivial
 assignee: claude
@@ -71,3 +72,19 @@ func TestSourcesVerbose(t *testing.T) {
 ### REFACTOR
 
 - Share stamp scanning with dk-affects, dk-ood, dk-dot
+
+## Completion Notes
+
+**Commit:** `cf594ac`
+
+### Files modified
+- `cmd/dk-redo/main.go` — `cmdSources` function added (~40 lines)
+
+### Design decisions
+- Scans all stamps, collects all input file paths into a set
+- Deduplicates, sorts, prints one path per line
+- Exit 0 always (empty output if no stamps)
+- `-v` shows file→labels mapping (which labels track each file)
+
+### Deferred work
+- No dedicated integration tests for dk-sources — tested indirectly through stamp package tests

@@ -1,7 +1,8 @@
 ---
 id: "012"
 title: Add release target for static cross-compiled binaries
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 4
 effort: Small
 assignee: claude
@@ -86,3 +87,28 @@ func TestInstallSubcommand(t *testing.T) {
 ### REFACTOR
 
 - Consider checksums file (sha256sums.txt) in dist/ for download verification
+
+## Completion Notes
+
+**Commit:** `0b7a5f8`
+
+### Files modified
+- `justfile` — added `release`, `release-macos` targets with cross-compilation
+- `.gitignore` — added `dist/`
+
+### Justfile targets added
+- `release`: builds linux/amd64 and windows/amd64 static binaries to `dist/`
+- `release-macos`: builds darwin/amd64 and darwin/arm64 to `dist/`
+
+### Binary size
+- ~1.9MB per platform (with `-s -w` ldflags stripping debug info)
+
+### Design decisions
+- Version injected from `git describe --tags --always --dirty`
+- `CGO_ENABLED=0` ensures fully static binaries
+- macOS builds in separate target (not all build environments support darwin cross-compilation)
+- No `install.sh` — the `dk-redo install <dest>` subcommand handles installation
+
+### Deferred work
+- SHA256 checksums file (`sha256sums.txt`) in dist/ — not implemented, can be added when release automation is set up
+- Linux ARM64 cross-compilation not included in `release` target (could be added)

@@ -1,7 +1,8 @@
 ---
 id: "001"
 title: Scaffold Go project with justfile and directory structure
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 1
 effort: Small
 assignee: claude
@@ -80,3 +81,24 @@ func main() {
 
 - Ensure `just build` output goes to project root as `./dk-redo`
 - Confirm binary is static: `file dk-redo` should show "statically linked"
+
+## Completion Notes
+
+**Commit:** `20189e4`
+
+### Files created
+- `go.mod`, `go.sum` — Go module (`github.com/dkantowitz/dk-redo`)
+- `cmd/dk-redo/main.go` — entry point placeholder
+- `internal/stamp/stamp.go`, `internal/hasher/hasher.go`, `internal/resolve/resolve.go` — package placeholders
+- `internal/testutil/testutil.go` — test helpers (WriteTempFile, WriteTempDir, RunBinary)
+- `justfile` — build targets (build, test, test-unit, test-integration, clean)
+- `.gitignore` — dk-redo binary, .stamps/, dist/, coverage files
+
+### Outcome
+- `just build` produces a 1.9MB static binary at `./dk-redo`
+- `CGO_ENABLED=0` ensures static linking
+- Module depends on `github.com/zeebo/blake3`
+- `.stamps/` added to `.gitignore`
+
+### Deferred work
+- None

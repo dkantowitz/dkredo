@@ -1,7 +1,8 @@
 ---
 id: "003"
 title: Implement hasher package for BLAKE3 file/dir hashing
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 2
 effort: Medium
 assignee: claude
@@ -128,3 +129,31 @@ func TestHashFileSizeBeforeHash(t *testing.T) {
 
 - Extract BLAKE3 digest computation into a small helper if used in multiple places
 - Ensure consistent error wrapping with `fmt.Errorf("hasher: %w", err)`
+
+## Completion Notes
+
+**Commit:** `085cf78`
+
+### Files modified
+- `internal/hasher/hasher.go` (136 lines) — `HashFile`, `HashDir`, `walkDir`
+- `internal/hasher/hasher_test.go` (309 lines) — 11 unit tests
+
+### Test inventory (11 tests)
+- `TestHashFileWithContent`, `TestHashFileEmpty`, `TestHashFileMissing`
+- `TestHashFilePermissionDenied`, `TestHashFileFollowsSymlink`
+- `TestHashDirEmpty`, `TestHashDirWithFiles`, `TestHashDirDeterminism`
+- `TestHashDirFollowsSymlinks`, `TestHashDirSymlinkLoop`
+- `TestFactsSizeAlongsideBlake3`
+
+### Coverage
+- **80.4%** statement coverage
+- `HashFile`: 80.0%, `HashDir`: 76.9%, `walkDir`: 82.6%
+
+### Design decisions
+- Symlinks are followed in both `HashFile` and `HashDir`
+- Symlink loop detection via tracking visited real paths
+- `Facts.Missing` uses `Size: -1` sentinel
+- Size is always recorded alongside hash for fast-path comparison
+
+### Deferred work
+- None. Coverage at 80.4% meets the 80% threshold (ticket 017). The uncovered paths are OS-level error conditions (e.g., file disappearing between stat and read) that are difficult to trigger reliably in tests.

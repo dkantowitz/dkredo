@@ -1,7 +1,8 @@
 ---
 id: "009"
 title: Implement dk-stamp command
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 3
 effort: Small
 assignee: claude
@@ -114,3 +115,25 @@ func TestStampVerbose(t *testing.T) {
 ### REFACTOR
 
 - Share flag definitions with ifchange where applicable
+
+## Completion Notes
+
+**Commit:** `65146df`
+
+### Files modified
+- `cmd/dk-redo/main.go` — `cmdStamp` function added (~40 lines)
+
+### Integration test coverage (from ticket 011)
+- `TestStampReplace` — second stamp replaces first entirely
+- `TestStampAppend` — `--append` merges into existing stamp
+- `TestMissingFileSentinel` — nonexistent inputs recorded as `missing:true`
+
+### Design decisions
+- Pipeline: parse flags → resolve inputs → hash files → (optional read + append) → write stamp
+- `--append` reads existing stamp and merges via `stamp.Append`
+- Without `--append`, stamp is written fresh (replaces any existing)
+- Always exits 0 on success, 2 on error
+
+### Deferred work
+- `-v` verbose output (printing stamp path and per-file facts) not explicitly tested in integration tests
+- Stdin input modes tested at resolve package level, not at stamp command level

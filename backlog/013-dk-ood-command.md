@@ -1,7 +1,8 @@
 ---
 id: "013"
 title: Implement dk-ood command (out-of-date labels)
-status: To Do
+status: Done
+completed_date: 2026-03-21
 priority: 4
 effort: Small
 assignee: claude
@@ -99,3 +100,21 @@ func TestOodUnknownFacts(t *testing.T) {
 
 - Share stamp scanning logic with dk-affects, dk-sources, dk-dot
   (all read all stamps)
+
+## Completion Notes
+
+**Commit:** `eebe46b`
+
+### Files modified
+- `cmd/dk-redo/main.go` — `cmdOod` function added (~60 lines)
+
+### Design decisions
+- Scans `.stamps/` directory, reads each stamp, re-hashes files from stamp's file list
+- Uses `stamp.Compare` with current facts to determine out-of-date status
+- Exit 0 = at least one label out of date, exit 1 = all up to date, exit 2 = error/no stamps
+- `-v` shows per-file change details from `CompareResult.ChangedFiles`
+- Accepts optional label arguments to check specific labels (default: all)
+
+### Deferred work
+- `--json` output descoped to rev2 per spec
+- Stamp scanning logic is inline (not shared with dk-affects/dk-sources/dk-dot) — could be extracted to a shared helper if the pattern solidifies
