@@ -104,8 +104,19 @@ the fact becomes false when the file is created, triggering a rebuild.
 ### Label escaping
 
 ```go
+// Percent-encode characters that cannot appear in filenames.
 func escapeLabel(label string) string {
-    return strings.ReplaceAll(label, "/", "%")
+    label = strings.ReplaceAll(label, "%", "%25") // escape char first
+    label = strings.ReplaceAll(label, "/", "%2F")
+    return label
+}
+
+// Percent-encode characters that would break stamp line parsing.
+func encodePath(path string) string {
+    path = strings.ReplaceAll(path, "%", "%25") // escape char first
+    path = strings.ReplaceAll(path, "\t", "%09")
+    path = strings.ReplaceAll(path, "\n", "%0A")
+    return path
 }
 ```
 
@@ -146,8 +157,11 @@ func escapeLabel(label string) string {
 | Append merges | existing stamp + new files | union of files |
 | Append updates facts | existing file with new content | facts updated |
 | Append preserves | files not in new call | preserved in stamp |
-| Tab-delimited roundtrip | path with spaces | parsed correctly |
-| Label escaping | "output/config.json" | ".stamps/output%config.json" |
+| Tab-delimited roundtrip | path with spaces | parsed correctly (spaces verbatim) |
+| Path with tab | "dir\tname/file" | tab encoded as %09, roundtrips |
+| Path with percent | "100%/file" | percent encoded as %25, roundtrips |
+| Label escaping | "output/config.json" | ".stamps/output%2Fconfig.json" |
+| Label with literal % | "100%done" | ".stamps/100%25done" |
 | Label with special chars | "foo bar" | handled correctly |
 | Unknown facts ignored | line with extra key:val | no error, unknown facts skipped |
 

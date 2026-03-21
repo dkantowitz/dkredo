@@ -104,7 +104,7 @@ generate-config:
     dk-stamp output/config.json config.yaml templates/*.j2
 ```
 
-Stamp file: `.stamps/output%config.json`
+Stamp file: `.stamps/output%2Fconfig.json`
 
 **Descriptive label** — for recipes that produce side effects, not files.
 Any unique string works:
@@ -143,7 +143,7 @@ assets:
     dk-stamp dist/assets static/images/ static/fonts/
 ```
 
-Stamp file: `.stamps/dist%assets`
+Stamp file: `.stamps/dist%2Fassets`
 
 **Why a label is required:** Without it, there is no way to namespace stamps
 per recipe. If two recipes depend on the same file (e.g., `config.json`),
@@ -432,12 +432,19 @@ first use if it does not exist.
 .stamps/
   firmware.bin           # stamp for label "firmware.bin"
   deploy-staging         # stamp for label "deploy-staging"
-  output%config.json     # stamp for label "output/config.json" (/ escaped as %)
+  output%2Fconfig.json   # stamp for label "output/config.json" (/ escaped as %2F)
 ```
 
-Labels containing `/` are escaped: `/` becomes `%`. This keeps all
-stamps in a flat directory (same convention as systemd unit escaping).
-Labels should not contain literal `%` characters to avoid collisions.
+Labels are escaped for use as flat filenames using **percent-encoding**
+(the same scheme as URL encoding):
+
+| Character | Encoded | Why |
+| --------- | ------- | --- |
+| `/`       | `%2F`   | Cannot appear in filenames |
+| `%`       | `%25`   | Escape character itself |
+
+All other characters are passed through verbatim. This keeps stamps in a
+flat directory while remaining unambiguous and reversible.
 
 ### File Format
 
@@ -452,9 +459,21 @@ assets/large-blob.bin	blake3:c8f0... size:52428800
 generated/version.h	missing:true
 ```
 
-The tab delimiter means paths with spaces are handled correctly — tabs in
-filenames are effectively nonexistent, and standard tools (`sort`, `cut -f1`,
-`grep`) work naturally on this format.
+The tab delimiter means paths with spaces are handled correctly. Standard
+tools (`sort`, `cut -f1`, `grep`) work naturally on this format.
+
+Paths inside the stamp are **percent-encoded** for characters that would
+break line parsing:
+
+| Character | Encoded | Why |
+| --------- | ------- | --- |
+| `\t` (tab)| `%09`   | Tab is the path/facts delimiter |
+| `\n` (newline) | `%0A` | Newline is the line delimiter |
+| `%`       | `%25`   | Escape character itself |
+
+All other characters (including spaces) are stored verbatim. In practice
+this encoding almost never activates — tabs and newlines in filenames are
+vanishingly rare — but when it does, errors are clear rather than mysterious.
 
 Lines are sorted by path. Facts are space-separated `key:value` pairs after
 the tab. Defined facts:
@@ -541,8 +560,15 @@ function file_facts(path):
     return "blake3:" + h + " size:" + str(sz)
 
 
+function encode_path(path):
+    # Percent-encode only the characters that break parsing.
+    path = path.replace("%", "%25")    # escape char first
+    path = path.replace("\t", "%09")
+    path = path.replace("\n", "%0A")
+    return path
+
 function stamp_line(path):
-    return path + "\t" + file_facts(path)    # tab-delimited
+    return encode_path(path) + "\t" + file_facts(path)
 
 
 function is_changed(stamp_lines, current_paths):
@@ -551,7 +577,7 @@ function is_changed(stamp_lines, current_paths):
         return true
     # Check each file's recorded facts against reality.
     for line in stamp_lines:
-        path, facts = parse_line(line)    # split on tab
+        path, facts = parse_line(line)    # split on tab, decode_path(path)
         if "missing:true" in facts:
             if exists(path):
                 return true       # file appeared
@@ -649,7 +675,7 @@ init-db:
     dk-stamp data/app.db schema.sql
 ```
 
-On first run, no stamp file exists at `.stamps/data%app.db`, so `dk-ifchange`
+On first run, no stamp file exists at `.stamps/data%2Fapp.db`, so `dk-ifchange`
 returns 0 (changed) and the recipe runs. `dk-stamp` then records the current
 hash of `schema.sql`. Subsequent runs skip unless `schema.sql` changes.
 
