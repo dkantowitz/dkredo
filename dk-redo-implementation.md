@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | Startup time | ~3-5ms | ~1ms | ~2-4ms | ~5-10ms |
 | Maintenance cost | Low | High (manual string/IO) | Medium | High past ~200 lines |
-| SHA256 in stdlib | Yes | No (need lib) | Yes | No (shell out to sha256sum) |
+| BLAKE3 library | zeebo/blake3 | need lib | blake3 crate | No (shell out) |
 | File walking, stdin | stdlib | Manual | stdlib | Fragile |
 | Testing | `go test`, table-driven | Poor story | Good | Very poor |
 | Cross-compile | Trivial | cosmocc handles it | Needs targets | N/A |
@@ -61,11 +61,15 @@ func main() {
 ```
 1. Parse flags, extract label (arg[0]) and inputs (arg[1:])
 2. Resolve inputs: expand directories, read stdin if "-" or "-0"
-3. For each resolved file: compute SHA256
-4. Compute combined hash: sort file list, hash (filename + filehash) pairs
-5. Read stamp file (.stamps/<escaped-label>)
-6. Compare: combined hash match AND file list match
-7. Exit 0 (changed), 1 (unchanged), or 2 (error)
+3. Read stamp file (.stamps/<escaped-label>)
+4. Compare file lists: if different sets of paths, exit 0 (changed)
+5. For each file in stamp, check recorded facts against current state:
+   - missing:true → check file still absent
+   - size:<n>     → compare file size (fast path, avoids hashing)
+   - blake3:<hex> → compare BLAKE3 hash
+6. If any fact is false: exit 0 (changed)
+7. All facts hold: exit 1 (unchanged)
+8. On error: exit 2
 ```
 
 ### Core algorithm (dk-stamp)
@@ -73,9 +77,9 @@ func main() {
 ```
 1. Parse flags (including --append), extract label and inputs
 2. Resolve inputs (same as ifchange)
-3. For each resolved file: compute SHA256
-4. If --append: read existing stamp, merge file lists, update hashes
-5. Compute combined hash over merged/complete list
+3. For each resolved file: compute facts (blake3 hash + size via stat; missing:true if absent)
+4. If --append: read existing stamp, merge file lists, replace facts for updated files
+5. Write stamp lines (one per file, sorted by path, tab-delimited): <path>\t<facts...>
 6. Write atomically: temp file + rename
 ```
 
@@ -91,20 +95,28 @@ func writeStamp(path string, content []byte) error {
 }
 ```
 
-### Sentinel for non-existent files
+### Facts for non-existent files
 
-```go
-const missingFileSentinel = "sha256:MISSING"
-```
-
-When hashing, if `os.Open` returns `os.ErrNotExist`, use the sentinel
-instead of erroring. This enables the bootstrapping pattern.
+When a file does not exist (`os.ErrNotExist`), record `missing:true` as
+its only fact — no hash or size. This enables the bootstrapping pattern:
+the fact becomes false when the file is created, triggering a rebuild.
 
 ### Label escaping
 
 ```go
+// Percent-encode characters that cannot appear in filenames.
 func escapeLabel(label string) string {
-    return strings.ReplaceAll(label, "/", "%")
+    label = strings.ReplaceAll(label, "%", "%25") // escape char first
+    label = strings.ReplaceAll(label, "/", "%2F")
+    return label
+}
+
+// Percent-encode characters that would break stamp line parsing.
+func encodePath(path string) string {
+    path = strings.ReplaceAll(path, "%", "%25") // escape char first
+    path = strings.ReplaceAll(path, "\t", "%09")
+    path = strings.ReplaceAll(path, "\n", "%0A")
+    return path
 }
 ```
 
@@ -116,9 +128,9 @@ func escapeLabel(label string) string {
 
 | Test | Input | Expected |
 |---|---|---|
-| HashFile with content | temp file "hello" | deterministic SHA256 |
-| HashFile empty file | temp file "" | SHA256 of empty (e3b0c44...) |
-| HashFile missing file | nonexistent path | missingFileSentinel |
+| HashFile with content | temp file "hello" | deterministic BLAKE3 + size |
+| HashFile empty file | temp file "" | BLAKE3 of empty + size:0 |
+| HashFile missing file | nonexistent path | `missing:true` fact |
 | HashFile permission denied | unreadable file | error |
 | HashDir empty dir | empty temp dir | deterministic hash |
 | HashDir with files | dir with 3 files | hash changes when file added/removed/modified |
@@ -132,19 +144,26 @@ func escapeLabel(label string) string {
 
 | Test | Input | Expected |
 |---|---|---|
-| Write then read | label + file list + hashes | roundtrip matches |
+| Write then read | label + file list + facts | roundtrip matches |
 | Write creates .stamps/ | nonexistent .stamps dir | auto-created |
 | Write is atomic | kill mid-write | no partial stamp |
 | Read missing stamp | nonexistent label | "no stamp" (not error) |
 | Read corrupt stamp | garbage content | error (exit 2) |
 | Compare unchanged | same hash + same files | match (exit 1) |
-| Compare changed hash | different hash | no match (exit 0) |
-| Compare changed filelist | same hash but different files | no match (exit 0) |
+| Compare changed hash | different blake3 fact | no match (exit 0) |
+| Compare changed filelist | same facts but different files | no match (exit 0) |
+| Compare size fast path | size fact differs | no match without hashing (exit 0, no file read) |
+| Compare missing appeared | missing:true but file exists | no match (exit 0) |
 | Append merges | existing stamp + new files | union of files |
-| Append updates hash | existing file with new content | hash updated |
+| Append updates facts | existing file with new content | facts updated |
 | Append preserves | files not in new call | preserved in stamp |
-| Label escaping | "output/config.json" | ".stamps/output%config.json" |
+| Tab-delimited roundtrip | path with spaces | parsed correctly (spaces verbatim) |
+| Path with tab | "dir\tname/file" | tab encoded as %09, roundtrips |
+| Path with percent | "100%/file" | percent encoded as %25, roundtrips |
+| Label escaping | "output/config.json" | ".stamps/output%2Fconfig.json" |
+| Label with literal % | "100%done" | ".stamps/100%25done" |
 | Label with special chars | "foo bar" | handled correctly |
+| Unknown facts ignored | line with extra key:val | no error, unknown facts skipped |
 
 **resolve package:**
 

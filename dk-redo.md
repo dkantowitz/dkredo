@@ -104,7 +104,7 @@ generate-config:
     dk-stamp output/config.json config.yaml templates/*.j2
 ```
 
-Stamp file: `.stamps/output%config.json`
+Stamp file: `.stamps/output%2Fconfig.json`
 
 **Descriptive label** — for recipes that produce side effects, not files.
 Any unique string works:
@@ -143,7 +143,7 @@ assets:
     dk-stamp dist/assets static/images/ static/fonts/
 ```
 
-Stamp file: `.stamps/dist%assets`
+Stamp file: `.stamps/dist%2Fassets`
 
 **Why a label is required:** Without it, there is no way to namespace stamps
 per recipe. If two recipes depend on the same file (e.g., `config.json`),
@@ -180,12 +180,12 @@ The first argument is the **label** — a unique key for this recipe's stamp
 (see [The Label](#the-label)). Remaining arguments are input files or
 directories.
 
-`dk-ifchange` hashes whatever input files it receives as arguments, computes
-a combined hash, and compares it to the stored stamp. Because globs are
-expanded by the shell before dk-redo sees them, adding or removing files that
-match the glob changes the argument list, which changes the combined hash,
-which triggers a rebuild. The stamp also records the input file list, so a
-change in the set of files (not just their contents) is detected.
+`dk-ifchange` compares the current state of input files against the stored
+stamp's per-file facts. Because globs are expanded by the shell before dk-redo
+sees them, adding or removing files that match the glob changes the argument
+list, which triggers a rebuild. Each file's facts (size, blake3 hash,
+existence) are checked — if any fact no longer holds, the inputs are
+considered changed. Size is checked first as a fast path to avoid hashing.
 
 **Exit codes:**
 
@@ -212,19 +212,18 @@ dk-stamp [--append] <label> -|-0                # stdin, same modes as dk-ifchan
 dk-stamp [--append] <label> src/*.c -      # positional args + stdin combined
 ```
 
-Records the combined content hash plus input file list under `<label>`.
+Records per-file facts (hash, size, existence) for each input under `<label>`.
 Called after a successful build so the next `dk-ifchange` can detect changes.
 
 **By default, `dk-stamp` replaces the entire stamp** — the previous input list
-and hashes are discarded. This is the correct behavior when `dk-stamp` is
+and facts are discarded. This is the correct behavior when `dk-stamp` is
 called once at the end of a recipe with the complete input list.
 
 **With `--append`, `dk-stamp` merges into the existing stamp:**
 
 - New files are added to the input list
-- Files already in the stamp have their hashes updated
+- Files already in the stamp have their facts updated (new hash, size)
 - Files not mentioned in the current call are preserved
-- The combined hash is recomputed over the merged file list
 
 This supports multi-phase builds where inputs are discovered incrementally:
 
@@ -249,7 +248,7 @@ discovered headers from the dep file AND the explicit source/lib inputs.
 
 | Flag       | Description                                      |
 | ---------- | ------------------------------------------------ |
-| `-v`       | Verbose: print stamp path and hash               |
+| `-v`       | Verbose: print stamp path and per-file facts      |
 | `-q`       | Quiet: no output on success                      |
 | `--append` | Merge into existing stamp instead of replacing it |
 
@@ -261,12 +260,11 @@ discovered headers from the dep file AND the explicit source/lib inputs.
 > no stamp is written, and the next run correctly rebuilds.
 
 **Non-existent input files:** If an input file listed in `dk-stamp` does not
-exist at stamp time, dk-stamp records a sentinel hash for that file (distinct
-from any real content hash). On the next `dk-ifchange`, if the file still
-doesn't exist, the sentinel matches and no change is detected. If the file
-has been created, its real hash won't match the sentinel, triggering a rebuild.
-This is how the bootstrapping pattern works (see
-[Bootstrapping](#bootstrapping-file-doesnt-exist-yet)).
+exist at stamp time, dk-stamp records `missing:true` for that file (no hash or
+size). On the next `dk-ifchange`, if the file still doesn't exist, the fact
+holds and no change is detected. If the file has been created, `missing:true`
+is no longer true, triggering a rebuild. This is how the bootstrapping pattern
+works (see [Bootstrapping](#bootstrapping-file-doesnt-exist-yet)).
 
 #### `dk-always` — invalidate stamps (force rebuild)
 
@@ -299,8 +297,8 @@ written by the core commands.
 dk-ood [labels...]       # check specific labels (default: all)
 ```
 
-For each stamped label, re-hashes its inputs and compares to stored hash.
-Prints labels whose inputs have changed.
+For each stamped label, re-checks per-file facts (size, then hash) against
+current file state. Prints labels whose inputs have changed.
 
 **Exit codes:**
 
@@ -316,7 +314,7 @@ at all" from "stamps exist and are all current."
 
 | Flag     | Description                 |
 | -------- | --------------------------- |
-| `-v`     | Show hash details per label |
+| `-v`     | Show per-file fact details  |
 | `-q`     | Just exit code, no output   |
 | `--json` | Output as JSON array        |
 
@@ -434,27 +432,68 @@ first use if it does not exist.
 .stamps/
   firmware.bin           # stamp for label "firmware.bin"
   deploy-staging         # stamp for label "deploy-staging"
-  output%config.json     # stamp for label "output/config.json" (/ escaped as %)
+  output%2Fconfig.json   # stamp for label "output/config.json" (/ escaped as %2F)
 ```
 
-Labels containing `/` are escaped: `/` becomes `%`. This keeps all
-stamps in a flat directory (same convention as systemd unit escaping).
-Labels should not contain literal `%` characters to avoid collisions.
+Labels are escaped for use as flat filenames using **percent-encoding**
+(the same scheme as URL encoding):
+
+| Character | Encoded | Why |
+| --------- | ------- | --- |
+| `/`       | `%2F`   | Cannot appear in filenames |
+| `%`       | `%25`   | Escape character itself |
+
+All other characters are passed through verbatim. This keeps stamps in a
+flat directory while remaining unambiguous and reversible.
 
 ### File Format
 
-Each stamp is a single file — hash and input list combined:
+Each stamp is a single file containing per-file facts. Each line is a
+file path and its facts, separated by a **tab character**:
 
 ```
-blake3:a1b2c3d4e5f6...
-src/main.c
-src/uart.c
-include/config.h
+src/main.c	blake3:9f2a... size:1234
+src/uart.c	blake3:d41e... size:567
+include/config.h	blake3:7bc1... size:89
+assets/large-blob.bin	blake3:c8f0... size:52428800
+generated/version.h	missing:true
 ```
 
-Line 1 is the content hash (prefixed with algorithm). Remaining lines are the
-input file list, one per line, sorted. Directories are expanded to their
-constituent files.
+The tab delimiter means paths with spaces are handled correctly. Standard
+tools (`sort`, `cut -f1`, `grep`) work naturally on this format.
+
+Paths inside the stamp are **percent-encoded** for characters that would
+break line parsing:
+
+| Character | Encoded | Why |
+| --------- | ------- | --- |
+| `\t` (tab)| `%09`   | Tab is the path/facts delimiter |
+| `\n` (newline) | `%0A` | Newline is the line delimiter |
+| `%`       | `%25`   | Escape character itself |
+
+All other characters (including spaces) are stored verbatim. In practice
+this encoding almost never activates — tabs and newlines in filenames are
+vanishingly rare — but when it does, errors are clear rather than mysterious.
+
+Lines are sorted by path. Facts are space-separated `key:value` pairs after
+the tab. Defined facts:
+
+| Fact | Value | When recorded |
+| ---- | ----- | ------------- |
+| `blake3` | hex digest | Always (for existing files) |
+| `size` | decimal byte count | Always (for existing files) |
+| `missing` | `true` | File did not exist at stamp time |
+
+A file is **changed** if any recorded fact is no longer true. `size` is
+checked first as a fast path — if size differs, the hash is not recomputed
+(a `stat()` call is far cheaper than reading + hashing the file).
+
+A missing file records only `missing:true` (no hash or size). When the
+file is later created, the `missing:true` fact becomes false, triggering
+a rebuild.
+
+**Forward compatibility:** readers should ignore unknown fact keys. This
+allows future versions to add new facts without breaking older readers.
 
 **Why one file, not two?** Atomicity. The stamp is written atomically
 (write to temp, rename into place). With two files (.hash + .deps), a crash
@@ -465,12 +504,13 @@ version-controlled artifacts.
 
 ### Hashing Specification
 
-dk-redo uses **BLAKE3** for all content hashes in rev1.
+dk-redo uses **BLAKE3** for all content hashes in rev1. BLAKE3 is chosen
+for speed and collision resistance, not cryptographic security — we need
+fast, deterministic, unique-enough digests for change detection.
 
-- Per-file digest algorithm: BLAKE3 over raw file bytes
-- Combined digest algorithm: BLAKE3 over canonicalized `(path, digest)` records
-- Stamp line 1 format: `blake3:<hex-digest>`
-- Missing file sentinel: deterministic BLAKE3 value derived from the path
+- Per-file digest: BLAKE3 over raw file bytes, 256-bit (64 hex chars)
+- Per-file facts: `blake3:<hex> size:<bytes>` (always both), or `missing:true`
+- Change detection: any fact that no longer holds means the file changed
 
 The goal is deterministic results across machines for the same workspace
 content and input set.
@@ -511,28 +551,52 @@ function resolve_inputs(raw_args, stdin_paths):
     return unique_preserving_order(canon)
 
 
-function file_digest(path):
-    if exists(path):
-        return blake3(read_all_bytes(path)).hex()
-    # Sentinel is stable and path-specific.
-    return blake3("dk-redo:missing\n" + path).hex()
+function file_facts(path):
+    if not exists(path):
+        return "missing:true"
+    sz = file_size(path)          # stat(), not read
+    data = read_all_bytes(path)
+    h = blake3(data).hex()
+    return "blake3:" + h + " size:" + str(sz)
 
 
-function combined_digest(paths):
-    h = blake3_init()
-    for p in paths:
-        d = file_digest(p)
-        # Length-prefix fields to avoid delimiter ambiguity.
-        h.update(u64be(len(p)))
-        h.update(bytes(p))
-        h.update(u64be(len(d)))
-        h.update(bytes(d))
-    return h.hex()
+function encode_path(path):
+    # Percent-encode only the characters that break parsing.
+    path = path.replace("%", "%25")    # escape char first
+    path = path.replace("\t", "%09")
+    path = path.replace("\n", "%0A")
+    return path
+
+function stamp_line(path):
+    return encode_path(path) + "\t" + file_facts(path)
 
 
-# Stamp content:
-#   line 1: "blake3:" + combined_digest(resolved_paths)
-#   lines 2..N: resolved_paths, one per line, sorted
+function is_changed(stamp_lines, current_paths):
+    # Different file list means changed.
+    if set(stamp_paths(stamp_lines)) != set(current_paths):
+        return true
+    # Check each file's recorded facts against reality.
+    for line in stamp_lines:
+        path, facts = parse_line(line)    # split on tab, decode_path(path)
+        if "missing:true" in facts:
+            if exists(path):
+                return true       # file appeared
+        else:
+            if not exists(path):
+                return true       # file disappeared
+            # Fast path: check size first (stat only, no read).
+            recorded_size = parse_fact(facts, "size")
+            if file_size(path) != recorded_size:
+                return true       # size differs → changed, skip hash
+            recorded_hash = parse_fact(facts, "blake3")
+            if blake3(read_all_bytes(path)).hex() != recorded_hash:
+                return true
+    return false
+
+
+# Stamp content (one line per input, tab-delimited, sorted by path):
+#   <path>\t blake3:<hex> size:<bytes>
+#   <path>\tmissing:true
 ```
 
 ## Dry Run
@@ -611,7 +675,7 @@ init-db:
     dk-stamp data/app.db schema.sql
 ```
 
-On first run, no stamp file exists at `.stamps/data%app.db`, so `dk-ifchange`
+On first run, no stamp file exists at `.stamps/data%2Fapp.db`, so `dk-ifchange`
 returns 0 (changed) and the recipe runs. `dk-stamp` then records the current
 hash of `schema.sql`. Subsequent runs skip unless `schema.sql` changes.
 
@@ -799,14 +863,12 @@ as inputs of other labels.**
 
 ```
 # .stamps/firmware.bin
-blake3:abc123...
-src/main.c
-src/uart.c
+src/main.c blake3:abc123...
+src/uart.c blake3:fed987...
 
 # .stamps/release.tar.gz — depends on firmware.bin (also a label)
-blake3:def456...
-firmware.bin
-config.json
+config.json blake3:ccc111...
+firmware.bin blake3:def456...
 ```
 
 For rev2, `dk-ifchange` would:
