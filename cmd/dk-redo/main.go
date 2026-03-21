@@ -139,7 +139,7 @@ func dispatch(cmd string, flags Flags, args []string) int {
 	case "sources":
 		return cmdStub("sources", flags, args)
 	case "dot":
-		return cmdStub("dot", flags, args)
+		return cmdDot(flags, args)
 	default:
 		fmt.Fprintf(os.Stderr, "dk-redo: unknown command %q\n", cmd)
 		usage()

@@ -2,3 +2,5 @@
 /dk-redo
 dist/
 .claude/worktrees/
+coverage.out
+coverage.html
