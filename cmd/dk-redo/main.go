@@ -137,7 +137,7 @@ func dispatch(cmd string, flags Flags, args []string) int {
 	case "affects":
 		return cmdAffects(flags, args)
 	case "sources":
-		return cmdStub("sources", flags, args)
+		return cmdSources(flags, args)
 	case "dot":
 		return cmdDot(flags, args)
 	default:
