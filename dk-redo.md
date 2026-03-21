@@ -446,7 +446,7 @@ Labels should not contain literal `%` characters to avoid collisions.
 Each stamp is a single file — hash and input list combined:
 
 ```
-sha256:a1b2c3d4e5f6...
+blake3:a1b2c3d4e5f6...
 src/main.c
 src/uart.c
 include/config.h
@@ -462,6 +462,78 @@ between writes leaves inconsistent state. One file = one atomic unit.
 
 Add `.stamps/` to `.gitignore` — these are local build state, not
 version-controlled artifacts.
+
+### Hashing Specification
+
+dk-redo uses **BLAKE3** for all content hashes in rev1.
+
+- Per-file digest algorithm: BLAKE3 over raw file bytes
+- Combined digest algorithm: BLAKE3 over canonicalized `(path, digest)` records
+- Stamp line 1 format: `blake3:<hex-digest>`
+- Missing file sentinel: deterministic BLAKE3 value derived from the path
+
+The goal is deterministic results across machines for the same workspace
+content and input set.
+
+```text
+# Inputs:
+#   raw_args: input arguments after <label> (files, dirs, -, -0)
+#   stdin_mode: none | newline | nul
+#   stdin_paths: parsed from stdin if mode is newline/nul
+
+function resolve_inputs(raw_args, stdin_paths):
+    items = []
+
+    # 1) Build ordered item stream: positional args, with '-' or '-0'
+    # replaced by stdin paths at that position.
+    for arg in raw_args:
+        if arg == '-' or arg == '-0':
+            items.extend(stdin_paths)
+        else:
+            items.append(arg)
+
+    # 2) Expand directories recursively to files.
+    expanded = []
+    for item in items:
+        if is_directory(item):
+            # Walk recursively, include files only, lexical sort by path.
+            files = walk_files_recursive(item)
+            files.sort()
+            expanded.extend(files)
+        else:
+            expanded.append(item)
+
+    # 3) Canonicalize paths (project-relative, '/' separators) and sort.
+    canon = [canonical_relpath(p) for p in expanded]
+    canon.sort()
+
+    # 4) De-duplicate exact path repeats.
+    return unique_preserving_order(canon)
+
+
+function file_digest(path):
+    if exists(path):
+        return blake3(read_all_bytes(path)).hex()
+    # Sentinel is stable and path-specific.
+    return blake3("dk-redo:missing\n" + path).hex()
+
+
+function combined_digest(paths):
+    h = blake3_init()
+    for p in paths:
+        d = file_digest(p)
+        # Length-prefix fields to avoid delimiter ambiguity.
+        h.update(u64be(len(p)))
+        h.update(bytes(p))
+        h.update(u64be(len(d)))
+        h.update(bytes(d))
+    return h.hex()
+
+
+# Stamp content:
+#   line 1: "blake3:" + combined_digest(resolved_paths)
+#   lines 2..N: resolved_paths, one per line, sorted
+```
 
 ## Dry Run
 
@@ -710,7 +782,7 @@ Based on analysis of apenwarr/redo, goredo, and redo-c argument interfaces:
 | `--json` output on diagnostic commands     | Modern CLI practice                     |
 | `dk-log` (build log capture)               | apenwarr/redo, goredo                   |
 | Parallel stamp checking                    | goredo `-j`                             |
-| Hash algorithm selection (`--algo blake3`) | redo-c uses SHA256, goredo uses BLAKE2b |
+
 
 ## Transitive Dependency Tracking (rev2 Roadmap)
 
@@ -727,12 +799,12 @@ as inputs of other labels.**
 
 ```
 # .stamps/firmware.bin
-sha256:abc123...
+blake3:abc123...
 src/main.c
 src/uart.c
 
 # .stamps/release.tar.gz — depends on firmware.bin (also a label)
-sha256:def456...
+blake3:def456...
 firmware.bin
 config.json
 ```
@@ -830,7 +902,7 @@ adds efficiency (skip the hash computation early) and enables `dk-ood` and
 | ---------------------- | --------------------------------- | ------------------------------------ |
 | Build description      | `.do` shell scripts               | justfile recipes                     |
 | Dependency declaration | `redo-ifchange` inside .do        | `dk-ifchange` guard line             |
-| Change detection       | Content hash (SHA1/SHA256/BLAKE2) | Content hash (SHA256)                |
+| Change detection       | Content hash (SHA1/SHA256/BLAKE2) | Content hash (BLAKE3)                |
 | Transitive rebuilds    | Automatic                         | Via just recipe deps (rev2: checked) |
 | Parallel builds        | Built-in (`-j`)                   | Via just `[parallel]` attribute      |
 | Task listing           | Limited (`redo-targets`)          | `just --list`                        |
