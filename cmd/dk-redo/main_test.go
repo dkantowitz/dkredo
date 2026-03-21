@@ -155,7 +155,7 @@ func TestDispatchUnknownCommand(t *testing.T) {
 }
 
 func TestDispatchKnownCommands(t *testing.T) {
-	for _, cmd := range []string{"ifchange", "stamp", "always", "ood", "affects", "sources"} {
+	for _, cmd := range []string{"ifchange", "always", "ood", "affects", "sources"} {
 		t.Run(cmd, func(t *testing.T) {
 			code := dispatch(cmd, Flags{}, nil)
 			if code != 0 {

@@ -127,7 +127,7 @@ func dispatch(cmd string, flags Flags, args []string) int {
 	case "ifchange":
 		return cmdStub("ifchange", flags, args)
 	case "stamp":
-		return cmdStub("stamp", flags, args)
+		return cmdStamp(flags, args)
 	case "always":
 		return cmdAlways(flags, args)
 	case "install":
