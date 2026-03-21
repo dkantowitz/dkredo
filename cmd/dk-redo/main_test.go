@@ -155,12 +155,9 @@ func TestDispatchUnknownCommand(t *testing.T) {
 }
 
 func TestDispatchKnownCommands(t *testing.T) {
-	for _, cmd := range []string{"always"} {
-		t.Run(cmd, func(t *testing.T) {
-			code := dispatch(cmd, Flags{}, nil)
-			if code != 0 {
-				t.Errorf("exit code = %d, want 0 for stub command %q", code, cmd)
-			}
-		})
+	// always is one of the few commands that returns 0 with no args
+	code := dispatch("always", Flags{}, nil)
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0 for always command", code)
 	}
 }

@@ -147,12 +147,6 @@ func dispatch(cmd string, flags Flags, args []string) int {
 	}
 }
 
-// cmdStub is a placeholder for commands not yet implemented.
-func cmdStub(name string, _ Flags, _ []string) int {
-	fmt.Printf("%s: not yet implemented\n", name)
-	return 0
-}
-
 // cmdInstall copies the running binary to destDir and creates symlinks for
 // every symlink-dispatchable command.
 func cmdInstall(flags Flags, args []string) int {
