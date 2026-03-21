@@ -216,15 +216,14 @@ Records per-file facts (hash, size, existence) for each input under `<label>`.
 Called after a successful build so the next `dk-ifchange` can detect changes.
 
 **By default, `dk-stamp` replaces the entire stamp** — the previous input list
-and hashes are discarded. This is the correct behavior when `dk-stamp` is
+and facts are discarded. This is the correct behavior when `dk-stamp` is
 called once at the end of a recipe with the complete input list.
 
 **With `--append`, `dk-stamp` merges into the existing stamp:**
 
 - New files are added to the input list
-- Files already in the stamp have their hashes updated
+- Files already in the stamp have their facts updated (new hash, size)
 - Files not mentioned in the current call are preserved
-- The combined hash is recomputed over the merged file list
 
 This supports multi-phase builds where inputs are discovered incrementally:
 
@@ -249,7 +248,7 @@ discovered headers from the dep file AND the explicit source/lib inputs.
 
 | Flag       | Description                                      |
 | ---------- | ------------------------------------------------ |
-| `-v`       | Verbose: print stamp path and hash               |
+| `-v`       | Verbose: print stamp path and per-file facts      |
 | `-q`       | Quiet: no output on success                      |
 | `--append` | Merge into existing stamp instead of replacing it |
 
@@ -298,8 +297,8 @@ written by the core commands.
 dk-ood [labels...]       # check specific labels (default: all)
 ```
 
-For each stamped label, re-hashes its inputs and compares to stored hash.
-Prints labels whose inputs have changed.
+For each stamped label, re-checks per-file facts (size, then hash) against
+current file state. Prints labels whose inputs have changed.
 
 **Exit codes:**
 
@@ -315,7 +314,7 @@ at all" from "stamps exist and are all current."
 
 | Flag     | Description                 |
 | -------- | --------------------------- |
-| `-v`     | Show hash details per label |
+| `-v`     | Show per-file fact details  |
 | `-q`     | Just exit code, no output   |
 | `--json` | Output as JSON array        |
 
@@ -442,33 +441,40 @@ Labels should not contain literal `%` characters to avoid collisions.
 
 ### File Format
 
-Each stamp is a single file containing per-file facts:
+Each stamp is a single file containing per-file facts. Each line is a
+file path and its facts, separated by a **tab character**:
 
 ```
-src/main.c blake3:9f2a...
-src/uart.c blake3:d41e...
-include/config.h blake3:7bc1...
-assets/large-blob.bin blake3:c8f0... size:52428800
-generated/version.h missing:true
+src/main.c	blake3:9f2a... size:1234
+src/uart.c	blake3:d41e... size:567
+include/config.h	blake3:7bc1... size:89
+assets/large-blob.bin	blake3:c8f0... size:52428800
+generated/version.h	missing:true
 ```
 
-Each line is a sorted input file path followed by space-separated **facts**
-about that file. Facts are `key:value` pairs. Not every line needs every
-fact — only the facts relevant to that file are recorded. Defined facts:
+The tab delimiter means paths with spaces are handled correctly — tabs in
+filenames are effectively nonexistent, and standard tools (`sort`, `cut -f1`,
+`grep`) work naturally on this format.
+
+Lines are sorted by path. Facts are space-separated `key:value` pairs after
+the tab. Defined facts:
 
 | Fact | Value | When recorded |
 | ---- | ----- | ------------- |
 | `blake3` | hex digest | Always (for existing files) |
-| `size` | decimal byte count | Large files where hashing is slow |
+| `size` | decimal byte count | Always (for existing files) |
 | `missing` | `true` | File did not exist at stamp time |
 
-A file is **changed** if any recorded fact is no longer true. When `size`
-is present it is checked first as a fast path — if size differs, the hash
-is not recomputed.
+A file is **changed** if any recorded fact is no longer true. `size` is
+checked first as a fast path — if size differs, the hash is not recomputed
+(a `stat()` call is far cheaper than reading + hashing the file).
 
 A missing file records only `missing:true` (no hash or size). When the
 file is later created, the `missing:true` fact becomes false, triggering
 a rebuild.
+
+**Forward compatibility:** readers should ignore unknown fact keys. This
+allows future versions to add new facts without breaking older readers.
 
 **Why one file, not two?** Atomicity. The stamp is written atomically
 (write to temp, rename into place). With two files (.hash + .deps), a crash
@@ -479,10 +485,12 @@ version-controlled artifacts.
 
 ### Hashing Specification
 
-dk-redo uses **BLAKE3** for all content hashes in rev1.
+dk-redo uses **BLAKE3** for all content hashes in rev1. BLAKE3 is chosen
+for speed and collision resistance, not cryptographic security — we need
+fast, deterministic, unique-enough digests for change detection.
 
-- Per-file digest: BLAKE3 over raw file bytes
-- Per-file facts: `blake3:<hex>`, `size:<bytes>`, or `missing:true`
+- Per-file digest: BLAKE3 over raw file bytes, 256-bit (64 hex chars)
+- Per-file facts: `blake3:<hex> size:<bytes>` (always both), or `missing:true`
 - Change detection: any fact that no longer holds means the file changed
 
 The goal is deterministic results across machines for the same workspace
@@ -524,19 +532,17 @@ function resolve_inputs(raw_args, stdin_paths):
     return unique_preserving_order(canon)
 
 
-function file_facts(path, size_threshold):
+function file_facts(path):
     if not exists(path):
         return "missing:true"
+    sz = file_size(path)          # stat(), not read
     data = read_all_bytes(path)
     h = blake3(data).hex()
-    facts = "blake3:" + h
-    if len(data) >= size_threshold:
-        facts += " size:" + str(len(data))
-    return facts
+    return "blake3:" + h + " size:" + str(sz)
 
 
-function stamp_line(path, size_threshold):
-    return path + " " + file_facts(path, size_threshold)
+function stamp_line(path):
+    return path + "\t" + file_facts(path)    # tab-delimited
 
 
 function is_changed(stamp_lines, current_paths):
@@ -545,30 +551,26 @@ function is_changed(stamp_lines, current_paths):
         return true
     # Check each file's recorded facts against reality.
     for line in stamp_lines:
-        path, facts = parse_line(line)
+        path, facts = parse_line(line)    # split on tab
         if "missing:true" in facts:
             if exists(path):
                 return true       # file appeared
         else:
             if not exists(path):
                 return true       # file disappeared
-            # Fast check: size first (avoids hashing), then hash.
-            if "size:" in facts:
-                recorded_size = parse_fact(facts, "size")
-                if file_size(path) != recorded_size:
-                    return true
-                    # size differs → changed, skip hash
-            if "blake3:" in facts:
-                recorded_hash = parse_fact(facts, "blake3")
-                if blake3(read_all_bytes(path)).hex() != recorded_hash:
-                    return true
+            # Fast path: check size first (stat only, no read).
+            recorded_size = parse_fact(facts, "size")
+            if file_size(path) != recorded_size:
+                return true       # size differs → changed, skip hash
+            recorded_hash = parse_fact(facts, "blake3")
+            if blake3(read_all_bytes(path)).hex() != recorded_hash:
+                return true
     return false
 
 
-# Stamp content (one line per input, sorted by path):
-#   <path> blake3:<hex>
-#   <path> blake3:<hex> size:<bytes>     (large files)
-#   <path> missing:true
+# Stamp content (one line per input, tab-delimited, sorted by path):
+#   <path>\t blake3:<hex> size:<bytes>
+#   <path>\tmissing:true
 ```
 
 ## Dry Run

@@ -77,9 +77,9 @@ func main() {
 ```
 1. Parse flags (including --append), extract label and inputs
 2. Resolve inputs (same as ifchange)
-3. For each resolved file: compute facts (blake3 hash; size for large files; missing:true if absent)
-4. If --append: read existing stamp, merge file lists, update facts
-5. Write stamp lines (one per file, sorted by path): <path> <facts...>
+3. For each resolved file: compute facts (blake3 hash + size via stat; missing:true if absent)
+4. If --append: read existing stamp, merge file lists, replace facts for updated files
+5. Write stamp lines (one per file, sorted by path, tab-delimited): <path>\t<facts...>
 6. Write atomically: temp file + rename
 ```
 
@@ -117,8 +117,8 @@ func escapeLabel(label string) string {
 
 | Test | Input | Expected |
 |---|---|---|
-| HashFile with content | temp file "hello" | deterministic BLAKE3 |
-| HashFile empty file | temp file "" | BLAKE3 of empty |
+| HashFile with content | temp file "hello" | deterministic BLAKE3 + size |
+| HashFile empty file | temp file "" | BLAKE3 of empty + size:0 |
 | HashFile missing file | nonexistent path | `missing:true` fact |
 | HashFile permission denied | unreadable file | error |
 | HashDir empty dir | empty temp dir | deterministic hash |
@@ -141,13 +141,15 @@ func escapeLabel(label string) string {
 | Compare unchanged | same hash + same files | match (exit 1) |
 | Compare changed hash | different blake3 fact | no match (exit 0) |
 | Compare changed filelist | same facts but different files | no match (exit 0) |
-| Compare size fast path | size fact differs | no match without hashing (exit 0) |
+| Compare size fast path | size fact differs | no match without hashing (exit 0, no file read) |
 | Compare missing appeared | missing:true but file exists | no match (exit 0) |
 | Append merges | existing stamp + new files | union of files |
 | Append updates facts | existing file with new content | facts updated |
 | Append preserves | files not in new call | preserved in stamp |
+| Tab-delimited roundtrip | path with spaces | parsed correctly |
 | Label escaping | "output/config.json" | ".stamps/output%config.json" |
 | Label with special chars | "foo bar" | handled correctly |
+| Unknown facts ignored | line with extra key:val | no error, unknown facts skipped |
 
 **resolve package:**
 
