@@ -23,17 +23,23 @@ _is_ your build description.
 dk-redo is a single binary. Symlinks or subcommands provide the short command names.
 
 ```bash
-# install the main binary
+# install binary and create symlinks
+dk-redo install /usr/local/bin
+
+# or manually:
 cp dk-redo /usr/local/bin/dk-redo
 chmod +x /usr/local/bin/dk-redo
-
-# create symlinks for argv[0] dispatch
 cd /usr/local/bin
 for cmd in dk-ifchange dk-stamp dk-always \
            dk-ood dk-affects dk-dot dk-sources; do
     ln -sf dk-redo "$cmd"
 done
 ```
+
+The `install` subcommand copies the dk-redo binary to the destination
+directory and creates all symlinks. Note: `install` is only available as a
+subcommand (`dk-redo install`), not via argv[0] dispatch — a symlink named
+`dk-install` would not trigger it.
 
 Both invocation styles work identically:
 
@@ -201,7 +207,7 @@ recipe failure, which is the correct behavior — errors should not be silent.
 | Flag | Description                                              |
 | ---- | -------------------------------------------------------- |
 | `-v` | Verbose: print which files changed                       |
-| `-n` | Dry run: report changed/unchanged without updating state |
+| `-n` | Force changed: always report inputs as changed (exit 0)  |
 | `-q` | Quiet: suppress "up to date" message                     |
 
 #### `dk-stamp` — record current input state
@@ -316,12 +322,14 @@ at all" from "stamps exist and are all current."
 | -------- | --------------------------- |
 | `-v`     | Show per-file fact details  |
 | `-q`     | Just exit code, no output   |
-| `--json` | Output as JSON array        |
 
 #### `dk-affects` — reverse dependency query
 
 ```
 dk-affects <file> [file...]
+dk-affects -                    # read file list from stdin (\n terminated)
+dk-affects -0                   # read file list from stdin (\0 terminated)
+dk-affects src/main.c - lib.c   # positional args + stdin combined
 ```
 
 Scans all stamp files to find which labels list the given file(s) as
@@ -337,7 +345,6 @@ inputs. Answers: "if I change `src/uart.c`, what needs rebuilding?"
 | Flag     | Description                           |
 | -------- | ------------------------------------- |
 | `-v`     | Show which input triggered each label |
-| `--json` | Output as JSON                        |
 
 #### `dk-dot` — dependency graph in Graphviz DOT format
 
@@ -406,6 +413,12 @@ When an argument is a directory (trailing `/` optional — dk-redo checks with
 sorts for determinism, hashes contents. Detects added, removed, and modified
 files within the directory.
 
+**Symlinks are followed.** When dk-redo encounters a symbolic link (whether
+to a file or directory), it follows the link and hashes the target content.
+Symlinks are not treated specially — the hash reflects the actual file data
+the build would see. Circular symlink loops are detected and reported as
+errors (exit 2).
+
 ### 3. Stdin — newline or null-terminated
 
 ```bash
@@ -420,7 +433,17 @@ fd -e j2 templates | dk-ifchange output-config config.yaml -
 ```
 
 `-` reads newline-terminated lines from stdin. `-0` reads null-terminated.
-These appear as positional arguments and can be mixed with file/directory args.
+These appear as positional arguments and can be mixed with file/directory
+args. **Stdin paths are spliced into the argument list at the position where
+`-` or `-0` appears.** For example:
+
+```bash
+dk-ifchange label blah.h - bar.h
+```
+
+This processes `blah.h`, then all paths read from stdin (in order), then
+`bar.h`. The final list is sorted and deduplicated, so the positional
+ordering affects only how inputs are gathered, not the stamp content.
 
 ## Stamp Storage
 
@@ -492,8 +515,13 @@ A missing file records only `missing:true` (no hash or size). When the
 file is later created, the `missing:true` fact becomes false, triggering
 a rebuild.
 
-**Forward compatibility:** readers should ignore unknown fact keys. This
-allows future versions to add new facts without breaking older readers.
+**Unknown fact keys:** if a stamp contains fact keys not recognized by the
+current version of dk-redo, the file is treated as **changed** (not a match).
+The reasoning: if we cannot verify all recorded facts, we cannot confirm the
+file is unchanged. When the label is rebuilt, `dk-stamp` writes a new stamp
+with only the facts known to the current version, eliminating the unknown
+keys. A warning is issued to stderr when unknown facts are encountered:
+`warning: <label>: unknown fact key "<key>" in stamp — treating as changed`.
 
 **Why one file, not two?** Atomicity. The stamp is written atomically
 (write to temp, rename into place). With two files (.hash + .deps), a crash
@@ -599,29 +627,19 @@ function is_changed(stamp_lines, current_paths):
 #   <path>\tmissing:true
 ```
 
-## Dry Run
+## Force Changed (`-n`)
 
 ```bash
 dk-ifchange -n firmware.bin src/*.c include/*.h
 ```
 
-With `-n`, dk-ifchange reports what _would_ happen without updating any state:
+With `-n`, dk-ifchange always exits 0 (changed), regardless of whether inputs
+actually changed. This simulates a "force rebuild" for a single recipe
+invocation without deleting the stamp. The stamp is not modified — the next
+run without `-n` will check normally.
 
-```
-firmware.bin: CHANGED (3 files modified: src/main.c, src/uart.c, include/config.h)
-```
-
-or:
-
-```
-firmware.bin: up to date
-```
-
-This is simpler than redo's dry-run problem. Redo discovers dependencies
-_during_ .do script execution, so dry-run requires stale graph data. dk-redo's
-dependencies are explicit in the justfile — the stamp file records exactly
-what was checked last time, and the current file list is known from the
-command arguments. No speculation needed.
+This is useful for testing and CI pipelines where you want to force a recipe
+to run without permanently invalidating the stamp (which `dk-always` does).
 
 `dk-ood` is the multi-target dry-run: it checks all stamps and lists which
 are out of date.
@@ -830,7 +848,7 @@ Based on analysis of apenwarr/redo, goredo, and redo-c argument interfaces:
 
 | Feature                           | Source                              |
 | --------------------------------- | ----------------------------------- |
-| `-n` dry run on ifchange          | goredo (only impl with `--dry-run`) |
+| `-n` force-changed on ifchange    | dk-redo design                      |
 | `--append` on dk-stamp            | dk-redo design                      |
 | `dk-ood` (out-of-date query)      | apenwarr/redo, goredo               |
 | `dk-affects` (reverse deps)       | goredo-only feature                 |
@@ -925,10 +943,16 @@ adds efficiency (skip the hash computation early) and enables `dk-ood` and
 | ------------------------ | ---------------------------------------------- |
 | `-v`                     | Verbose output                                 |
 | `-q`                     | Quiet (suppress informational output)          |
-| `--color` / `--no-color` | ANSI color control (default: auto-detect tty)  |
 | `--stamps-dir <path>`    | Override stamp directory (default: `.stamps/`)  |
 | `--help`                 | Show usage                                     |
 | `--version`              | Show version                                   |
+
+**Environment variable override (future):** The `DK_REDO_FLAGS` environment
+variable will provide a way to set default flags for all dk-redo commands.
+For example, `DK_REDO_FLAGS="--stamps-dir /tmp/stamps"` would change the
+stamps directory for all invocations without modifying command lines. Flags
+from `DK_REDO_FLAGS` are prepended to the argument list and can be overridden
+by explicit command-line flags. This is planned for a future release.
 
 ### Arguments (ifchange, stamp)
 
@@ -954,9 +978,11 @@ adds efficiency (skip the hash computation early) and enables `dk-ood` and
 
 ### Arguments (affects)
 
-| Argument | Type       | Description            |
-| -------- | ---------- | ---------------------- |
-| `<file>` | positional | Input file(s) to query |
+| Argument | Type       | Description                                     |
+| -------- | ---------- | ----------------------------------------------- |
+| `<file>` | positional | Input file(s) to query                          |
+| `-`      | positional | Read query file list from stdin, newline-terminated |
+| `-0`     | positional | Read query file list from stdin, null-terminated    |
 
 ## Comparison with redo
 

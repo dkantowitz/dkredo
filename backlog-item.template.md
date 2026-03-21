@@ -8,6 +8,8 @@ assignee: [claude|human]
 created_date: YYYY-MM-DD
 labels: [bugfix|enhancement|feature, core]
 swimlane: [Core Library|Tooling/Backflow|Tooling/Claude Environment|Publication|Core Documentation]
+phase: {{int}}
+depends_on: []
 source_file: {{file}}:{{line}}
 ---
 
@@ -35,8 +37,8 @@ code snippets where helpful.
 
 ### RED
 
-```cpp
-TEST_CASE("Description of expected behavior") {
+```go
+func TestDescriptionOfExpectedBehavior(t *testing.T) {
     // Setup and assertions
 }
 ```

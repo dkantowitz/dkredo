@@ -27,49 +27,70 @@ Single binary, argv[0] dispatch (like busybox/redo-c/goredo):
 ```
 cmd/dk-redo/main.go     — argv[0] dispatch + subcommand parsing
 internal/stamp/          — stamp read/write/compare
-internal/hasher/         — file/directory/stdin hashing
-internal/resolve/        — input argument resolution (file vs dir vs stdin)
+internal/hasher/         — BLAKE3 file/directory hashing
+internal/resolve/        — input argument resolution (file vs dir vs stdin, including ReadStdin)
 ```
 
 ### argv[0] dispatch
 
 ```go
 func main() {
-    cmd := filepath.Base(os.Args[0])
-    // strip dk- prefix for symlink style
-    if strings.HasPrefix(cmd, "dk-") {
-        cmd = strings.TrimPrefix(cmd, "dk-")
-    }
-    // or use first arg for subcommand style (dk-redo ifchange ...)
-    if cmd == "dk-redo" || cmd == "redo" {
-        if len(os.Args) < 2 { usage(); os.Exit(2) }
-        cmd = os.Args[1]
-        os.Args = os.Args[1:] // shift
-    }
+    cmd, args := resolveCommand(os.Args)
     switch cmd {
-    case "ifchange": runIfchange()
-    case "stamp":    runStamp()
-    case "always":   runAlways()
+    case "ifchange": runIfchange(args)
+    case "stamp":    runStamp(args)
+    case "always":   runAlways(args)
+    case "install":  runInstall(args)
     // rev1.x: ood, affects, dot, sources
     default:         usage(); os.Exit(2)
     }
 }
+
+// resolveCommand determines the subcommand and remaining args
+// from argv without mutating globals.
+func resolveCommand(argv []string) (string, []string) {
+    cmd := filepath.Base(argv[0])
+    if strings.HasPrefix(cmd, "dk-") {
+        cmd = strings.TrimPrefix(cmd, "dk-")
+    }
+    args := argv[1:]
+    // subcommand style: dk-redo ifchange ...
+    if cmd == "redo" {
+        if len(args) < 1 { usage(); os.Exit(2) }
+        cmd = args[0]
+        args = args[1:]
+    }
+    // "install" is only available via subcommand, not argv[0] dispatch
+    if cmd == "install" && filepath.Base(argv[0]) != "dk-redo" {
+        usage(); os.Exit(2)
+    }
+    return cmd, args
+}
 ```
+
+Note: command functions receive `args []string` as a parameter rather than
+reading `os.Args` directly. This avoids mutating global state and makes it
+easier to source arguments from other places (e.g., `DK_REDO_FLAGS`
+environment variable in the future).
 
 ### Core algorithm (dk-ifchange)
 
 ```
-1. Parse flags, extract label (arg[0]) and inputs (arg[1:])
+1. Parse flags (-v, -q, -n), extract label (arg[0]) and inputs (arg[1:])
 2. Resolve inputs: expand directories, read stdin if "-" or "-0"
-3. Read stamp file (.stamps/<escaped-label>)
-4. Compare file lists: if different sets of paths, exit 0 (changed)
-5. For each file in stamp, check recorded facts against current state:
+   (stdin paths are spliced at the position of - or -0 in the arg list)
+3. If -n flag: exit 0 (always report changed — force rebuild)
+4. Read stamp file (.stamps/<escaped-label>)
+5. If no stamp: exit 0 (first run — changed)
+6. Compare file lists: if different sets of paths, exit 0 (changed)
+7. For each file in stamp, check recorded facts against current state:
+   - unknown fact key → warn to stderr, treat as changed (exit 0)
    - missing:true → check file still absent
    - size:<n>     → compare file size (fast path, avoids hashing)
    - blake3:<hex> → compare BLAKE3 hash
-6. If any fact is false: exit 0 (changed)
-7. All facts hold: exit 1 (unchanged)
-8. On error: exit 2
+8. If any fact is false: exit 0 (changed)
+9. All facts hold: exit 1 (unchanged)
+10. On error: exit 2
 ```
 
 ### Core algorithm (dk-stamp)
@@ -132,13 +153,13 @@ func encodePath(path string) string {
 | HashFile empty file | temp file "" | BLAKE3 of empty + size:0 |
 | HashFile missing file | nonexistent path | `missing:true` fact |
 | HashFile permission denied | unreadable file | error |
-| HashDir empty dir | empty temp dir | deterministic hash |
-| HashDir with files | dir with 3 files | hash changes when file added/removed/modified |
+| HashFile follows symlink | symlink to file | hash of target content |
+| HashDir empty dir | empty temp dir | empty list (no files) |
+| HashDir with files | dir with 3 files | sorted list, hashes change on modification |
 | HashDir determinism | same files, different creation order | same hash |
+| HashDir follows symlinks | dir with symlinked file | hash of target content |
 | HashDir symlink loop | dir with circular symlink | error (not infinite loop) |
-| HashStdin newline | "a.c\nb.c\n" | list of 2 files |
-| HashStdin null | "a.c\0b.c\0" | list of 2 files |
-| HashStdin empty | "" | empty list |
+| HashDir size before hash | file with different size | size recorded, no hash needed for comparison |
 
 **stamp package:**
 
@@ -163,7 +184,9 @@ func encodePath(path string) string {
 | Label escaping | "output/config.json" | ".stamps/output%2Fconfig.json" |
 | Label with literal % | "100%done" | ".stamps/100%25done" |
 | Label with special chars | "foo bar" | handled correctly |
-| Unknown facts ignored | line with extra key:val | no error, unknown facts skipped |
+| Unknown facts → changed | line with extra key:val | treated as changed, warning issued |
+| Corrupt stamp | garbage/malformed content | treated as changed (out of date), exit 0 |
+| Adversarial stamp | binary data, very long lines | handled gracefully, treated as changed |
 
 **resolve package:**
 
@@ -174,7 +197,12 @@ func encodePath(path string) string {
 | Mixed | ["a.c", "src/", "b.c"] | files + expanded dir |
 | Stdin newline | stdin="x.c\ny.c\n", args=["-"] | two files from stdin |
 | Stdin null | stdin="x.c\0y.c\0", args=["-0"] | two files from stdin |
-| Mixed with stdin | ["a.c", "-", "b.c"] | positional + stdin merged |
+| Mixed with stdin | ["a.c", "-", "b.c"] + stdin="x.c\n" | a.c, x.c, b.c (stdin spliced at position) |
+| Stdin position ordering | ["z.c", "-", "a.c"] + stdin="m.c\n" | final list sorted+deduped regardless |
+| ReadStdin newline | "a.c\nb.c\n" reader | list of 2 files |
+| ReadStdin null | "a.c\0b.c\0" reader | list of 2 files |
+| ReadStdin empty | "" reader | empty list |
+| Deduplication | same file from args and stdin | listed once |
 | No stdin when tty | ["-"] but stdin is tty | error |
 
 ### Integration tests (full binary)
@@ -198,6 +226,35 @@ These test the actual binary with real files on disk.
 | Error propagation | corrupt stamp file | exit 2 |
 | Subcommand style | `dk-redo ifchange ...` | same as `dk-ifchange ...` |
 | Symlink style | symlink dk-ifchange -> dk-redo | same behavior |
+| Label with slash | label "output/config.json" | stamp at .stamps/output%2Fconfig.json, roundtrips |
+| Stdin combined with args | `dk-ifchange label a.c - b.c` with stdin | all inputs processed correctly |
+| Force changed flag | dk-ifchange -n label files... | always exit 0 |
+| Unknown symlink name | symlink dk-bogus -> dk-redo | exit 2 with usage |
+
+### Performance benchmarks
+
+Benchmarks are part of the regression test suite. They verify that dk-redo
+stays within its performance budget.
+
+| Benchmark | Setup | Target |
+|---|---|---|
+| BenchmarkIfchangeUnchanged10 | 10 files, stamp exists | < 10ms |
+| BenchmarkIfchangeUnchanged300 | 300 files across 10 labels (30 each) | < 300ms total |
+| BenchmarkStamp100 | 100 small files | < 50ms |
+| BenchmarkStartupOverhead | no-op invocation (--help) | < 5ms |
+
+The 300-dependency benchmark (300 files spread among 10 labels, total check
+under 300ms) is the primary regression target. Benchmarks run as Go benchmark
+tests (`go test -bench`) and can be gated in CI.
+
+### Known test deficiencies
+
+**Atomic write testing:** The atomic write mechanism (temp file + rename) is
+inherently difficult to test for crash safety. Unit tests verify the write-
+then-rename sequence but cannot simulate a crash between the two operations.
+This is noted as an accepted deficiency. The mechanism is well-established
+(used by redo-c, goredo, and many other tools) and does not warrant complex
+crash simulation in the test suite.
 
 ### Test sources to study
 
@@ -218,7 +275,7 @@ tests encode years of discovered edge cases.
 CGO_ENABLED=0 go build -ldflags="-s -w" -o dk-redo ./cmd/dk-redo
 ```
 
-Produces a ~3-4MB static binary. Symlinks created at install time.
+Produces a ~3-4MB static binary. Symlinks are created by `dk-redo install <dest-path>`.
 
 ## Performance budget
 
