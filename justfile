@@ -2,7 +2,7 @@
 
 # Build a static binary
 build:
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o dk-redo ./cmd/dk-redo
+    CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)" -o dk-redo ./cmd/dk-redo
 
 # Run all tests
 test: test-unit test-integration
