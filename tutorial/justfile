@@ -1,0 +1,42 @@
+set guards
+
+# ── Generate a timestamp header from a config file ──────────────
+#
+#   Inputs:  config.txt
+#   Output:  build/header.txt
+#   Tool:    date + echo (writes a header line with the current timestamp)
+#
+header:
+    ?dk-ifchange build/header.txt config.txt
+    mkdir -p build
+    echo "# Generated $(date '+%Y-%m-%d %H:%M:%S') with config: $(cat config.txt)" > build/header.txt
+    dk-stamp build/header.txt config.txt
+
+# ── Assemble a report from the header and data files ────────────
+#
+#   Inputs:  build/header.txt  data/part1.txt  data/part2.txt
+#   Output:  build/report.txt
+#   Tool:    cat (concatenates inputs into one file)
+#
+report: header
+    ?dk-ifchange build/report.txt build/header.txt data/part1.txt data/part2.txt
+    cat build/header.txt data/part1.txt data/part2.txt > build/report.txt
+    dk-stamp build/report.txt build/header.txt data/part1.txt data/part2.txt
+
+# ── Add a "built-at" footer to the report ───────────────────────
+#
+#   Inputs:  build/report.txt
+#   Output:  build/final.txt
+#   Tool:    cat + date (appends a timestamp footer)
+#
+final: report
+    ?dk-ifchange build/final.txt build/report.txt
+    cat build/report.txt > build/final.txt
+    echo "" >> build/final.txt
+    echo "--- built at $(date '+%H:%M:%S') ---" >> build/final.txt
+    dk-stamp build/final.txt build/report.txt
+
+# ── Force-rebuild everything ─────────────────────────────────────
+clean:
+    dk-always build/header.txt build/report.txt build/final.txt
+    rm -rf build
