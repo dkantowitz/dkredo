@@ -27,21 +27,27 @@ statement is a stub.
 
 ## Analysis & Recommendations
 
-Algorithm per `dk-redo-implementation.md:59-73`:
+Algorithm per `dk-redo-implementation.md`:
 
 ```
 1. Parse flags (-v, -q, -n), extract label (arg[0]) and inputs (arg[1:])
+   - inputs may be empty (label-only mode)
 2. Resolve inputs via resolve.Resolve() — stdin paths spliced at position
 3. If -n flag: exit 0 immediately (force changed — always rebuild)
-4. Hash all resolved files via hasher.HashFile/HashDir
-5. Read stamp file via stamp.Read()
-6. If no stamp exists: exit 0 (first run — changed)
-7. Compare stamp vs current facts via stamp.Compare()
+4. Read stamp file via stamp.Read()
+5. If no stamp exists: exit 0 (first run — changed)
+   - This applies in label-only mode too: no stamp = out of date
+6. Merge: check set = union(resolved inputs, stamp's recorded file list)
+   - Label-only (no inputs): check set = stamp's file list only
+   - New inputs not in stamp → changed (exit 0)
+7. Hash all files in the check set via hasher.HashFile/HashDir
+8. Compare stamp vs current facts via stamp.Compare()
    - Returns CompareResult with Changed, ChangedFiles, Warnings
    - Unknown fact keys → treated as changed, warning issued to stderr
-8. If changed: exit 0 (recipe continues)
-9. If unchanged: exit 1 (? sigil stops recipe)
-10. On error: exit 2
+   - Files in check set but not in stamp → treated as changed
+9. If changed: exit 0 (recipe continues)
+10. If unchanged: exit 1 (? sigil stops recipe)
+11. On error: exit 2
 ```
 
 Exit codes per `dk-redo.md:193-197`:
@@ -57,11 +63,13 @@ Flags specific to ifchange:
 - `-q` quiet: suppress "up to date" message
 
 **All input modes must work:**
+- Label-only (no inputs) — deps from existing stamp only
 - Positional file arguments
 - Directory arguments (hashed recursively)
 - `-` (stdin, newline-terminated)
 - `-0` (stdin, null-terminated)
 - Combinations: `dk-ifchange label blah.h - bar.h` (stdin spliced at position)
+- Union behavior: args merged with existing stamp entries
 
 ## TDD Plan
 
@@ -119,6 +127,32 @@ func TestIfchangeUnknownFacts(t *testing.T) {
 
 func TestIfchangeCorruptStamp(t *testing.T) {
     // Corrupt stamp file → exit 0 (treated as changed, rebuild)
+}
+
+func TestIfchangeLabelOnly(t *testing.T) {
+    // dk-ifchange label (no inputs)
+    // No stamp exists → exit 0 (first run)
+}
+
+func TestIfchangeLabelOnlyWithStamp(t *testing.T) {
+    // dk-ifchange label (no inputs), stamp exists with files
+    // Files unchanged → exit 1
+    // File modified → exit 0
+}
+
+func TestIfchangeUnionWithStamp(t *testing.T) {
+    // Stamp has [a.c, b.h], args have [a.c]
+    // b.h modified → exit 0 (detected via stamp union)
+}
+
+func TestIfchangeNewInputNotInStamp(t *testing.T) {
+    // Stamp has [a.c], args have [a.c, new.c]
+    // → exit 0 (new.c is an addition)
+}
+
+func TestIfchangeStampEntryFileDeleted(t *testing.T) {
+    // Stamp has [a.c, b.c], args have [a.c]
+    // b.c deleted from disk → exit 0 (detected via stamp union)
 }
 ```
 

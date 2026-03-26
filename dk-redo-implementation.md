@@ -77,13 +77,20 @@ environment variable in the future).
 
 ```
 1. Parse flags (-v, -q, -n), extract label (arg[0]) and inputs (arg[1:])
+   - inputs may be empty (label-only mode)
 2. Resolve inputs: expand directories, read stdin if "-" or "-0"
    (stdin paths are spliced at the position of - or -0 in the arg list)
 3. If -n flag: exit 0 (always report changed — force rebuild)
 4. Read stamp file (.stamps/<escaped-label>)
 5. If no stamp: exit 0 (first run — changed)
-6. Compare file lists: if different sets of paths, exit 0 (changed)
-7. For each file in stamp, check recorded facts against current state:
+   - This applies in label-only mode too: no stamp means out of date
+6. Merge file lists: union of resolved inputs and stamp's recorded paths
+   - Label-only (no inputs): check set = stamp's file list
+   - Inputs provided: check set = union(inputs, stamp files)
+   - New inputs not in stamp → changed (exit 0, addition detected)
+7. For each file in the check set, check recorded facts against current state:
+   - file in stamp: check its recorded facts
+   - file not in stamp (new input): treat as changed (exit 0)
    - unknown fact key → warn to stderr, treat as changed (exit 0)
    - missing:true → check file still absent
    - size:<n>     → compare file size (fast path, avoids hashing)
@@ -96,12 +103,16 @@ environment variable in the future).
 ### Core algorithm (dk-stamp)
 
 ```
-1. Parse flags (including --append), extract label and inputs
-2. Resolve inputs (same as ifchange)
-3. For each resolved file: compute facts (blake3 hash + size via stat; missing:true if absent)
-4. If --append: read existing stamp, merge file lists, replace facts for updated files
-5. Write stamp lines (one per file, sorted by path, tab-delimited): <path>\t<facts...>
-6. Write atomically: temp file + rename
+1. Parse flags (including --append, -M <depfile>), extract label and inputs
+2. Resolve inputs (same as ifchange): positional args, stdin, directories
+3. If -M <depfile>: parse makefile dep format, extract dependency paths
+   - Strip "target:" prefix, handle backslash-newline continuations
+   - Split on whitespace to get individual paths
+   - Merge extracted paths into the resolved input list
+4. For each resolved file: compute facts (blake3 hash + size via stat; missing:true if absent)
+5. If --append: read existing stamp, merge file lists, replace facts for updated files
+6. Write stamp lines (one per file, sorted by path, tab-delimited): <path>\t<facts...>
+7. Write atomically: temp file + rename
 ```
 
 ### Atomic writes
@@ -204,6 +215,11 @@ func encodePath(path string) string {
 | ReadStdin empty | "" reader | empty list |
 | Deduplication | same file from args and stdin | listed once |
 | No stdin when tty | ["-"] but stdin is tty | error |
+| ReadDepfile simple | "out.bin: a.c b.h" | [a.c, b.h] |
+| ReadDepfile continuation | "out.bin: a.c \\\nb.h" | [a.c, b.h] |
+| ReadDepfile multiple targets | two "target: deps" lines | union of all deps |
+| ReadDepfile empty | "out.bin:" | empty list |
+| ReadDepfile missing file | nonexistent path | error |
 
 ### Integration tests (full binary)
 
@@ -228,6 +244,12 @@ These test the actual binary with real files on disk.
 | Symlink style | symlink dk-ifchange -> dk-redo | same behavior |
 | Label with slash | label "output/config.json" | stamp at .stamps/output%2Fconfig.json, roundtrips |
 | Stdin combined with args | `dk-ifchange label a.c - b.c` with stdin | all inputs processed correctly |
+| Label-only no stamp | `dk-ifchange label` (no inputs, no stamp) | exit 0 (first run) |
+| Label-only with stamp | `dk-ifchange label` (no inputs, stamp exists) | checks stamp's file list |
+| Union with stamp | stamp has [a.c, b.h], args=[a.c], modify b.h | exit 0 (b.h change detected) |
+| Depfile input | `dk-stamp label -M out.d` | stamp contains depfile deps |
+| Depfile combined | `dk-stamp label src/*.c -M out.d` | stamp = union(args, depfile) |
+| Depfile missing | `dk-stamp label -M nonexistent.d` | exit 2 (error) |
 | Force changed flag | dk-ifchange -n label files... | always exit 0 |
 | Unknown symlink name | symlink dk-bogus -> dk-redo | exit 2 with usage |
 
