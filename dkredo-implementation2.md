@@ -9,7 +9,7 @@ the stamp's file list for use in a build command, or adding new dependencies
 without re-hashing existing ones.
 
 This document redesigns dkredo around **primitive operations** that can be
-composed via `+operation` arguments in a single invocation. The existing
+composed via a sequence of `+operation` arguments in a single invocation. The existing
 command names become built-in aliases for common operation sequences.
 
 ## Design Principles
