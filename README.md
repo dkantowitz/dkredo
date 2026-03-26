@@ -3,12 +3,12 @@
 Content-hash change detection for [just](https://github.com/casey/just) recipes.
 
 ## Why?
-
 `just` runs recipes but doesn't track whether inputs changed.
-`make` tracks changes but uses timestamps, which break on `git checkout`, CI caches, and clock skew.
+`make` is a fifty-year-old build tool that is awkward for most scripting tasks.
+`redo` is simple, but it replaces the familiar makefile-style workflow.
 
-dk-redo gives just recipes **content-hash guards** — a recipe runs only when its
-inputs actually change. Two commands, one pattern:
+dk-redo adds **content-hash guards** to just recipes — a recipe runs only when its inputs actually change.
+
 
 ```just
 set guards
