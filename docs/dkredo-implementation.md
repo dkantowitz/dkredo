@@ -40,14 +40,14 @@ command names become built-in aliases for common operation sequences.
 
 ### Stamp Manipulation
 
-| Operation       | Args                | Description                                                                                                                                                           |
-| --------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `+add-names`    | `file...`           | Add files to stamp's name list. No facts computed. New entries have an empty fact list. Existing or duplicate entries are untouched.                                  |
-| `+add-names`    | -M `file...`        | Parse makefile dep format, add extracted paths to the name list. No facts computed. New entries have an empty fact list. Existing or duplicate entries are untouched. |
-| `+remove-names` | [`filter...`]       | Remove files from stamp's name list along with their facts. Empty filter matches every entry in the stamp file.                                                       |
-| `+remove-names` | `-ne` `[filter...]` | Iff the filename does not exist and the stamp fact for that file is not `missing:true`, remove it from stamp's name list along with their facts.                      |
+| Operation       | Args                | Description                                                                                                                                                                                                      |
+| --------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `+add-names`    | `file...`           | Add files to stamp's name list. No facts computed. New entries have an empty fact list. Existing or duplicate entries are untouched.                                                                             |
+| `+add-names`    | -M `file...`        | Parse makefile dep format, add extracted paths to the name list. No facts computed. New entries have an empty fact list. Existing or duplicate entries are untouched.                                            |
+| `+remove-names` | [`filter...`]       | Remove files from stamp's name list along with their facts. Empty filter matches every entry in the stamp file.                                                                                                  |
+| `+remove-names` | `-ne` `[filter...]` | Iff the filename does not exist and the stamp fact for that file is not `missing:true`, remove it from stamp's name list along with their facts.                                                                 |
 | `+stamp-facts`  | `[filter...]`       | Compute and record facts (blake3, size, missing) for the selected file names. If empty filter, re-calculate facts for all files currently in the stamp's name list. Does not add names — use `+add-names` first. |
-| `+clear-facts`  | [`filter...`]       | Remove facts from filtered file names, but leave the filename in the stamp.                                                                                           |
+| `+clear-facts`  | [`filter...`]       | Remove facts from filtered file names, but leave the filename in the stamp.                                                                                                                                      |
 
 ### Querying
 
@@ -63,22 +63,22 @@ command names become built-in aliases for common operation sequences.
 
 ### Verifying Facts
 
-| Operation       | Args          | Description                                                                                                                                |
-| --------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Operation       | Args          | Description                                                                                                                                                                                                                                                                   |
+| --------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `+check`        | `[filter...]` | Compare stamp facts against current filesystem. Exit 0 if any fact fails (changed), if any entry has no facts, or if any entry has an unreadable fact line or an unknown fact key. Exit 1 if all facts hold (unchanged). An empty stamp (no entries) passes. Exit 2 on error. |
-| `+check-assert` | `[filter...]` | Like `+check` but exit 2 (error) instead of 1 when unchanged. For scripts that should never be called on an up-to-date target.             |
+| `+check-assert` | `[filter...]` | Like `+check` but exit 2 (error) instead of 1 when unchanged. For scripts that should never be called on an up-to-date target.                                                                                                                                                |
 
 ### Files and Filters
 
-| Modifier      | Description                                                                                                                                                                                                                 |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `file/path.x` | Matches the exact path.                                                                                                                                                                                                     |
-| `.suffix`     | Filter matches all files with that suffix. Only available where argument is `filters`.                                                                                                                                      |
-| `-`           | Read file list from stdin (newline-terminated), pass to current operation.                                                                                                                                                  |
-| `-0`          | Read file list from stdin (null-terminated), pass to current operation.                                                                                                                                                     |
-| `-@ file`     | Read file names from `file` (newline-terminated). Works with process substitution: `-@ <(fd -e c src)`.                                                                                                                     |
-| `-@0 file`    | Read file names from `file` (null-terminated).                                                                                                                                                                              |
-| `-M file.d`   | Parse makefile dep format (gcc `-MD` output), extract paths. An input mode available on any operation that accepts file arguments (like `-`, `-0`, `-@`, `-@0`).                                                             |
+| Modifier      | Description                                                                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `file/path.x` | Matches the exact path.                                                                                                                                          |
+| `.suffix`     | Filter matches all files with that suffix. Only available where argument is `filters`.                                                                           |
+| `-`           | Read file list from stdin (newline-terminated), pass to current operation.                                                                                       |
+| `-0`          | Read file list from stdin (null-terminated), pass to current operation.                                                                                          |
+| `-@ file`     | Read file names from `file` (newline-terminated). Works with process substitution: `-@ <(fd -e c src)`.                                                          |
+| `-@0 file`    | Read file names from `file` (null-terminated).                                                                                                                   |
+| `-M file.d`   | Parse makefile dep format (gcc `-MD` output), extract paths. An input mode available on any operation that accepts file arguments (like `-`, `-0`, `-@`, `-@0`). |
 
 Note: `filter...` is strictly a superset of `file...`
 
@@ -141,7 +141,7 @@ the binary and dispatched via argv[0] (symlinks) or `--cmd`.
 | `dkr-ifchange <label>` (no files)       | `dkredo <label> +check`                                           |
 | `dkr-stamp <label> [files...]`          | `dkredo <label> +remove-names +add-names [files...] +stamp-facts` |
 | `dkr-stamp --append <label> [files...]` | `dkredo <label> +add-names [files...] +stamp-facts`               |
-| `dkr-stamp --append <label> -M file.d` | `dkredo <label> +add-names -M file.d +stamp-facts`                |
+| `dkr-stamp --append <label> -M file.d`  | `dkredo <label> +add-names -M file.d +stamp-facts`                |
 | `dkr-stamp <label> -M file.d`           | `dkredo <label> +remove-names +add-names -M file.d +stamp-facts`  |
 | `dkr-always <label>`                    | `dkredo <label> +clear-facts`                                     |
 | `dkr-fnames <label> [filter]`           | `dkredo <label> +names -e [filter]`                               |
@@ -257,7 +257,7 @@ but has no operation-specific logic; it just dispatches by name.
 ```
 cmd/dkredo/             — CLI dispatch + operation execution
 internal/ops/           — individual operations
-internal/hasher/        — BLAKE3 file hashing
+internal/facts/         — file fact collectio: BLAKE3 hashing, size, missing
 internal/resolve/       — input argument resolution (file vs stdin vs file-input, depfile)
 ```
 
@@ -422,17 +422,17 @@ dkr-ifchange -v out.bin src/*.c
 
 Each operation emits one or more lines to stderr when `-v` is active:
 
-| Operation       | Verbose output                                                      |
-| --------------- | ------------------------------------------------------------------- |
-| `+add-names`    | `+add-names: added 3 new entries (5 total)` — count of new vs existing |
+| Operation       | Verbose output                                                                                                                |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `+add-names`    | `+add-names: added 3 new entries (5 total)` — count of new vs existing                                                        |
 | `+remove-names` | `+remove-names: removed 2 entries (3 remaining)` — or `+remove-names -ne: removed gone.c (file missing, not expected absent)` |
-| `+stamp-facts`  | `+stamp-facts: computed facts for 5 files` — and for each file: `  src/main.c blake3:ab12... size:1842` |
-| `+clear-facts`  | `+clear-facts: cleared facts for 3 entries`                         |
-| `+check`        | `+check: changed (src/main.c: size differs)` — or `+check: unchanged (5 files, all facts match)` |
-| `+check-assert` | Same as `+check`                                                    |
-| `+names`        | (no extra output — already writes to stdout)                        |
-| `+facts`        | (no extra output — already writes to stdout)                        |
-| stamp I/O       | `stamp: loaded .stamps/out.bin (5 entries)` on read, `stamp: wrote .stamps/out.bin (5 entries)` on write |
+| `+stamp-facts`  | `+stamp-facts: computed facts for 5 files` — and for each file: `  src/main.c blake3:ab12... size:1842`                       |
+| `+clear-facts`  | `+clear-facts: cleared facts for 3 entries`                                                                                   |
+| `+check`        | `+check: changed (src/main.c: size differs)` — or `+check: unchanged (5 files, all facts match)`                              |
+| `+check-assert` | Same as `+check`                                                                                                              |
+| `+names`        | (no extra output — already writes to stdout)                                                                                  |
+| `+facts`        | (no extra output — already writes to stdout)                                                                                  |
+| stamp I/O       | `stamp: loaded .stamps/out.bin (5 entries)` on read, `stamp: wrote .stamps/out.bin (5 entries)` on write                      |
 
 Verbose output goes to stderr so it never interferes with stdout output
 from `+names` or `+facts`. The `-v` flag is threaded through the executor
@@ -620,12 +620,12 @@ Operations that don't produce a meaningful exit code (e.g., `+add-names`,
 
 ### Performance Budget
 
-| Operation                              | Target  | Notes                      |
-| -------------------------------------- | ------- | -------------------------- |
-| +check (unchanged, 10 files)           | < 10ms  | Read stamp + hash 10 files |
-| +check (unchanged, 1000 files)         | < 200ms | I/O bound                  |
-| +stamp-facts (100 files)               | < 50ms  | Hash + atomic write        |
-| Startup overhead                       | < 5ms   | Before any I/O             |
+| Operation                      | Target  | Notes                      |
+| ------------------------------ | ------- | -------------------------- |
+| +check (unchanged, 10 files)   | < 10ms  | Read stamp + hash 10 files |
+| +check (unchanged, 1000 files) | < 200ms | I/O bound                  |
+| +stamp-facts (100 files)       | < 50ms  | Hash + atomic write        |
+| Startup overhead               | < 5ms   | Before any I/O             |
 
 ### Benchmarks
 
@@ -657,7 +657,7 @@ exercise multi-operation sequences and alias commands against real files.
 | Add with stdin (-)           | pipe 3 paths                      | 3 files added                                          |
 | Add with -@ file             | file listing 3 paths              | 3 files added                                          |
 | Add with -@0 file            | null-terminated file              | correctly parsed and added                             |
-| Add with -@ <(process sub)   | `-@ <(fd -e c src)`              | files from process substitution added                  |
+| Add with -@ <(process sub)   | `-@ <(fd -e c src)`               | files from process substitution added                  |
 | Add with stdin (-0)          | null-terminated paths             | correctly parsed and added                             |
 | Add deduplicates             | same file from args and stdin     | listed once                                            |
 | Empty args                   | no files given                    | no change to stamp                                     |
@@ -676,16 +676,16 @@ exercise multi-operation sequences and alias commands against real files.
 
 ### Unit Tests: +stamp-facts
 
-| Test                     | Setup                                   | Expected                                |
-| ------------------------ | --------------------------------------- | --------------------------------------- |
-| Stamp all (empty filter) | stamp has a.c, b.c with empty facts     | facts computed for both (blake3 + size) |
-| Stamp by filter          | stamp has a.c, b.h; +stamp-facts .c     | a.c gets facts, b.h unchanged           |
-| Stamp missing file       | stamp has gone.c, file doesn't exist    | fact recorded as missing:true           |
-| Stamp with -M depfile    | +add-names -M .deps/out.d +stamp-facts  | names added from depfile, facts computed for all |
-| -M without +add-names    | stamp has a.c only; +stamp-facts -M file.d (file.d lists b.h) | b.h NOT added to stamp; only a.c stamped |
-| Facts are deterministic  | stamp same file twice                   | identical blake3 + size                 |
-| Size fast path           | stamp, change file content but not size | blake3 changes, size stays              |
-| Symlink target           | stamp has symlink                       | facts reflect target content, not link  |
+| Test                     | Setup                                                         | Expected                                         |
+| ------------------------ | ------------------------------------------------------------- | ------------------------------------------------ |
+| Stamp all (empty filter) | stamp has a.c, b.c with empty facts                           | facts computed for both (blake3 + size)          |
+| Stamp by filter          | stamp has a.c, b.h; +stamp-facts .c                           | a.c gets facts, b.h unchanged                    |
+| Stamp missing file       | stamp has gone.c, file doesn't exist                          | fact recorded as missing:true                    |
+| Stamp with -M depfile    | +add-names -M .deps/out.d +stamp-facts                        | names added from depfile, facts computed for all |
+| -M without +add-names    | stamp has a.c only; +stamp-facts -M file.d (file.d lists b.h) | b.h NOT added to stamp; only a.c stamped         |
+| Facts are deterministic  | stamp same file twice                                         | identical blake3 + size                          |
+| Size fast path           | stamp, change file content but not size                       | blake3 changes, size stays                       |
+| Symlink target           | stamp has symlink                                             | facts reflect target content, not link           |
 
 ### Unit Tests: +clear-facts
 
@@ -737,15 +737,15 @@ exercise multi-operation sequences and alias commands against real files.
 
 ### Unit Tests: internal packages
 
-**hasher:**
+**Facts:**
 
-| Test                   | Input                                | Expected                       |
-| ---------------------- | ------------------------------------ | ------------------------------ |
-| Hash file with content | temp file "hello"                    | deterministic BLAKE3 + size    |
-| Hash empty file        | temp file ""                         | BLAKE3 of empty + size:0       |
-| Hash missing file      | nonexistent path                     | missing:true                   |
-| Hash permission denied | unreadable file                      | error                          |
-| Hash follows symlink   | symlink to file                      | hash of target content         |
+| Test                   | Input             | Expected                    |
+| ---------------------- | ----------------- | --------------------------- |
+| Hash file with content | temp file "hello" | deterministic BLAKE3 + size |
+| Hash empty file        | temp file ""      | BLAKE3 of empty + size:0    |
+| Hash missing file      | nonexistent path  | missing:true                |
+| Hash permission denied | unreadable file   | error                       |
+| Hash follows symlink   | symlink to file   | hash of target content      |
 
 **stamp I/O:**
 
@@ -763,17 +763,17 @@ exercise multi-operation sequences and alias commands against real files.
 
 **resolve:**
 
-| Test              | Input                               | Expected                      |
-| ----------------- | ----------------------------------- | ----------------------------- |
-| File args         | ["src/a.c", "src/b.c"]              | two file paths                |
-| Stdin newline     | stdin="x.c\ny.c\n", args=["-"]      | two files                     |
-| Stdin null        | stdin="x.c\0y.c\0", args=["-0"]     | two files                     |
-| -@ file           | file listing paths, args=["-@", "list.txt"] | paths from file           |
-| -@0 file          | null-term file, args=["-@0", "list.txt"]    | paths from file           |
-| -@ process sub    | args=["-@", "<(fd -e c)"]           | paths from process sub        |
-| Stdin splicing    | ["a.c", "-", "b.c"] + stdin="x.c\n" | a.c, x.c, b.c                 |
-| Deduplication     | same file from args and stdin       | listed once                   |
-| Stdin on tty      | ["-"] but stdin is tty              | error                         |
+| Test           | Input                                       | Expected               |
+| -------------- | ------------------------------------------- | ---------------------- |
+| File args      | ["src/a.c", "src/b.c"]                      | two file paths         |
+| Stdin newline  | stdin="x.c\ny.c\n", args=["-"]              | two files              |
+| Stdin null     | stdin="x.c\0y.c\0", args=["-0"]             | two files              |
+| -@ file        | file listing paths, args=["-@", "list.txt"] | paths from file        |
+| -@0 file       | null-term file, args=["-@0", "list.txt"]    | paths from file        |
+| -@ process sub | args=["-@", "<(fd -e c)"]                   | paths from process sub |
+| Stdin splicing | ["a.c", "-", "b.c"] + stdin="x.c\n"         | a.c, x.c, b.c          |
+| Deduplication  | same file from args and stdin               | listed once            |
+| Stdin on tty   | ["-"] but stdin is tty                      | error                  |
 
 ### Integration Tests (justfile-based)
 
@@ -783,14 +783,14 @@ runs operations, and asserts exit codes and stamp contents.
 
 **Operation pipeline tests:**
 
-| Test                                 | Recipe                                                     | Expected                                              |
-| ------------------------------------ | ---------------------------------------------------------- | ----------------------------------------------------- |
-| Guard/build/stamp cycle              | +add-names + +check → build → +stamp-facts                 | first run: exit 0; second run: exit 1                 |
-| File change triggers rebuild         | +stamp-facts, modify file, +check                          | exit 0                                                |
-| Name addition persists across +check | +add-names a.c +check (exit 1)                             | a.c in stamp names even though check stopped pipeline |
-| +remove-names + +stamp-facts         | add 3 files, remove 1, stamp                               | stamp has 2 files with facts                          |
-| +clear-facts forces re-check         | +stamp-facts, +clear-facts, +check                         | exit 0 (changed — no facts to verify)                 |
-| Missing file bootstrapping           | +add-names nonexistent.c +stamp-facts, create file, +check | exit 0                                                |
+| Test                                 | Recipe                                                             | Expected                                              |
+| ------------------------------------ | ------------------------------------------------------------------ | ----------------------------------------------------- |
+| Guard/build/stamp cycle              | +add-names + +check → build → +stamp-facts                         | first run: exit 0; second run: exit 1                 |
+| File change triggers rebuild         | +stamp-facts, modify file, +check                                  | exit 0                                                |
+| Name addition persists across +check | +add-names a.c +check (exit 1)                                     | a.c in stamp names even though check stopped pipeline |
+| +remove-names + +stamp-facts         | add 3 files, remove 1, stamp                                       | stamp has 2 files with facts                          |
+| +clear-facts forces re-check         | +stamp-facts, +clear-facts, +check                                 | exit 0 (changed — no facts to verify)                 |
+| Missing file bootstrapping           | +add-names nonexistent.c +stamp-facts, create file, +check         | exit 0                                                |
 | Depfile integration                  | build with gcc -MD, +add-names -M .deps/out.d +stamp-facts, +names | stamp contains headers from depfile                   |
 
 **Alias (--cmd) tests:**
@@ -824,83 +824,83 @@ runs operations, and asserts exit codes and stamp contents.
 
 **.stamps/ directory location tests:**
 
-| Test | Recipe | Expected |
-|------|--------|----------|
-| .stamps/ in cwd | create .stamps/ in cwd, run dkredo | uses existing .stamps/ |
-| .stamps/ in parent | cd into subdir, run dkredo | finds .stamps/ in parent |
-| .stamps/ in grandparent | cd two levels deep, run dkredo | finds .stamps/ in grandparent |
-| No .stamps/ anywhere | fresh temp dir, run +stamp-facts | creates .stamps/ in cwd |
-| Nested project | parent has .stamps/, child has own .stamps/ | child's .stamps/ wins (closest) |
-| Paths are project-relative | cd into subdir, stamp src/main.c | stamp entry is relative to .stamps/ parent |
+| Test                       | Recipe                                      | Expected                                   |
+| -------------------------- | ------------------------------------------- | ------------------------------------------ |
+| .stamps/ in cwd            | create .stamps/ in cwd, run dkredo          | uses existing .stamps/                     |
+| .stamps/ in parent         | cd into subdir, run dkredo                  | finds .stamps/ in parent                   |
+| .stamps/ in grandparent    | cd two levels deep, run dkredo              | finds .stamps/ in grandparent              |
+| No .stamps/ anywhere       | fresh temp dir, run +stamp-facts            | creates .stamps/ in cwd                    |
+| Nested project             | parent has .stamps/, child has own .stamps/ | child's .stamps/ wins (closest)            |
+| Paths are project-relative | cd into subdir, stamp src/main.c            | stamp entry is relative to .stamps/ parent |
 
 **--install tests:**
 
-| Test | Recipe | Expected |
-|------|--------|----------|
-| Install to directory | `dkredo --install /tmp/test-bin` | binary copied, all symlinks created |
-| Install creates symlinks | check /tmp/test-bin/dkr-ifchange etc. | all alias symlinks point to dkredo |
-| Install over existing | run --install twice | no error, files replaced |
-| Install to missing dir | `dkredo --install /nonexistent/path` | exit 2 with error message |
-| Install permissions | target dir not writable | exit 2 with error message |
+| Test                     | Recipe                                | Expected                            |
+| ------------------------ | ------------------------------------- | ----------------------------------- |
+| Install to directory     | `dkredo --install /tmp/test-bin`      | binary copied, all symlinks created |
+| Install creates symlinks | check /tmp/test-bin/dkr-ifchange etc. | all alias symlinks point to dkredo  |
+| Install over existing    | run --install twice                   | no error, files replaced            |
+| Install to missing dir   | `dkredo --install /nonexistent/path`  | exit 2 with error message           |
+| Install permissions      | target dir not writable               | exit 2 with error message           |
 
 **--cmd parsing edge cases:**
 
-| Test | Recipe | Expected |
-|------|--------|----------|
-| --cmd with invalid alias | `dkredo label --cmd bogus` | exit 2 with error listing valid aliases |
-| --cmd with no alias name | `dkredo label --cmd` | exit 2 with error |
-| --cmd mixed with +ops | `dkredo label --cmd ifchange +names` | error: --cmd and +operations cannot be mixed |
-| --help flag | `dkredo --help` | full help text, exit 0 |
-| -h flag | `dkredo -h` | short help text, exit 0 |
-| No operations | `dkredo label` | exit 2 with help |
-| --version flag | `dkredo --version` | prints version string, exit 0 |
-| --version dev build | no ldflags version embedded | prints `dkredo dev`, exit 0 |
+| Test                     | Recipe                               | Expected                                     |
+| ------------------------ | ------------------------------------ | -------------------------------------------- |
+| --cmd with invalid alias | `dkredo label --cmd bogus`           | exit 2 with error listing valid aliases      |
+| --cmd with no alias name | `dkredo label --cmd`                 | exit 2 with error                            |
+| --cmd mixed with +ops    | `dkredo label --cmd ifchange +names` | error: --cmd and +operations cannot be mixed |
+| --help flag              | `dkredo --help`                      | full help text, exit 0                       |
+| -h flag                  | `dkredo -h`                          | short help text, exit 0                      |
+| No operations            | `dkredo label`                       | exit 2 with help                             |
+| --version flag           | `dkredo --version`                   | prints version string, exit 0                |
+| --version dev build      | no ldflags version embedded          | prints `dkredo dev`, exit 0                  |
 
 **--stamps-dir tests:**
 
-| Test | Recipe | Expected |
-|------|--------|----------|
-| Override stamps dir | `dkredo --stamps-dir /tmp/s label +stamp-facts` | stamp written to /tmp/s/label |
-| Dir created on write | `--stamps-dir` to nonexistent dir, +stamp-facts | dir created, stamp written |
-| Dir not created on read | `--stamps-dir` to nonexistent dir, +check | no dir created, exit 0 (no stamp) |
-| Paths relative to parent | `--stamps-dir /tmp/s`, stamp src/main.c | entry is relative to /tmp/s parent (/tmp) |
-| Works with aliases | `dkr-ifchange --stamps-dir /tmp/s label files` | uses /tmp/s instead of .stamps/ |
+| Test                     | Recipe                                          | Expected                                  |
+| ------------------------ | ----------------------------------------------- | ----------------------------------------- |
+| Override stamps dir      | `dkredo --stamps-dir /tmp/s label +stamp-facts` | stamp written to /tmp/s/label             |
+| Dir created on write     | `--stamps-dir` to nonexistent dir, +stamp-facts | dir created, stamp written                |
+| Dir not created on read  | `--stamps-dir` to nonexistent dir, +check       | no dir created, exit 0 (no stamp)         |
+| Paths relative to parent | `--stamps-dir /tmp/s`, stamp src/main.c         | entry is relative to /tmp/s parent (/tmp) |
+| Works with aliases       | `dkr-ifchange --stamps-dir /tmp/s label files`  | uses /tmp/s instead of .stamps/           |
 
 **DKREDO_ARGS tests:**
 
-| Test | Recipe | Expected |
-|------|--------|----------|
-| Stamps dir via env | `DKREDO_ARGS="--stamps-dir /tmp/s" dkredo label +stamp-facts` | stamp written to /tmp/s/label |
-| Verbose via env | `DKREDO_ARGS="-v" dkredo label +check` | verbose output on stderr |
-| Combined with CLI args | `DKREDO_ARGS="-v" dkredo --stamps-dir /tmp/s label +check` | both -v and --stamps-dir active |
-| Quoted path with spaces | `DKREDO_ARGS='--stamps-dir "/tmp/my stamps"' dkredo label +stamp-facts` | uses path with spaces |
-| Empty DKREDO_ARGS | `DKREDO_ARGS="" dkredo label +check` | no effect, normal behavior |
-| Unset DKREDO_ARGS | (not set) `dkredo label +check` | no effect, normal behavior |
-| Works with argv[0] alias | `DKREDO_ARGS="--stamps-dir /tmp/s" dkr-ifchange label files` | uses /tmp/s |
+| Test                     | Recipe                                                                  | Expected                        |
+| ------------------------ | ----------------------------------------------------------------------- | ------------------------------- |
+| Stamps dir via env       | `DKREDO_ARGS="--stamps-dir /tmp/s" dkredo label +stamp-facts`           | stamp written to /tmp/s/label   |
+| Verbose via env          | `DKREDO_ARGS="-v" dkredo label +check`                                  | verbose output on stderr        |
+| Combined with CLI args   | `DKREDO_ARGS="-v" dkredo --stamps-dir /tmp/s label +check`              | both -v and --stamps-dir active |
+| Quoted path with spaces  | `DKREDO_ARGS='--stamps-dir "/tmp/my stamps"' dkredo label +stamp-facts` | uses path with spaces           |
+| Empty DKREDO_ARGS        | `DKREDO_ARGS="" dkredo label +check`                                    | no effect, normal behavior      |
+| Unset DKREDO_ARGS        | (not set) `dkredo label +check`                                         | no effect, normal behavior      |
+| Works with argv[0] alias | `DKREDO_ARGS="--stamps-dir /tmp/s" dkr-ifchange label files`            | uses /tmp/s                     |
 
 **-v verbose tests:**
 
-| Test | Recipe | Expected |
-|------|--------|----------|
-| -v with +add-names | `dkredo -v label +add-names a.c b.c` | stderr shows count of added entries |
-| -v with +check changed | `dkredo -v label +check` (file modified) | stderr shows which file and why |
-| -v with +check unchanged | `dkredo -v label +check` (all match) | stderr shows "unchanged" with count |
-| -v with +stamp-facts | `dkredo -v label +stamp-facts` | stderr shows per-file facts |
-| -v stamp I/O | `dkredo -v label +check` | stderr shows "loaded .stamps/..." |
-| -v does not pollute stdout | `dkredo -v label +names` | stdout has names only, verbose on stderr |
-| No -v | `dkredo label +check` | no stderr output (unless warning) |
+| Test                       | Recipe                                   | Expected                                 |
+| -------------------------- | ---------------------------------------- | ---------------------------------------- |
+| -v with +add-names         | `dkredo -v label +add-names a.c b.c`     | stderr shows count of added entries      |
+| -v with +check changed     | `dkredo -v label +check` (file modified) | stderr shows which file and why          |
+| -v with +check unchanged   | `dkredo -v label +check` (all match)     | stderr shows "unchanged" with count      |
+| -v with +stamp-facts       | `dkredo -v label +stamp-facts`           | stderr shows per-file facts              |
+| -v stamp I/O               | `dkredo -v label +check`                 | stderr shows "loaded .stamps/..."        |
+| -v does not pollute stdout | `dkredo -v label +names`                 | stdout has names only, verbose on stderr |
+| No -v                      | `dkredo label +check`                    | no stderr output (unless warning)        |
 
 **-M depfile parsing edge cases:**
 
-| Test | Recipe | Expected |
-|------|--------|----------|
-| Simple depfile | `out.o: src/main.c src/util.h` | 2 paths extracted |
-| Multi-line continuation | `out.o: a.c \`<br>`  b.c c.c` | 3 paths extracted |
-| Multiple targets | `out.o out.d: a.c b.c` | 2 paths (targets ignored) |
-| Paths with spaces | depfile with escaped spaces | paths correctly parsed |
-| Empty depfile | empty file | no paths, no error |
-| Missing depfile | nonexistent .d file | exit 2 with error |
-| Malformed depfile | garbage content | exit 2 with error |
+| Test                    | Recipe                         | Expected                  |
+| ----------------------- | ------------------------------ | ------------------------- |
+| Simple depfile          | `out.o: src/main.c src/util.h` | 2 paths extracted         |
+| Multi-line continuation | `out.o: a.c \`<br>`  b.c c.c`  | 3 paths extracted         |
+| Multiple targets        | `out.o out.d: a.c b.c`         | 2 paths (targets ignored) |
+| Paths with spaces       | depfile with escaped spaces    | paths correctly parsed    |
+| Empty depfile           | empty file                     | no paths, no error        |
+| Missing depfile         | nonexistent .d file            | exit 2 with error         |
+| Malformed depfile       | garbage content                | exit 2 with error         |
 
 ## Design Rationale: Why No Directory Arguments?
 
@@ -967,8 +967,8 @@ dispatch layer) are excluded from coverage requirements.
 
 ## Future Work (Phase 3)
 
-| Feature | Description |
-| ------- | ----------- |
+| Feature                        | Description                                                                                                                                                                                                                      |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `+add-dir-listing` (tentative) | Track a directory's sorted filename list as a dependency. Detects file additions and deletions within a directory (not content changes -- individual file entries handle that). Behaviorally equivalent to hashing `ls \| sort`. |
 
 ## Test Sources to Study

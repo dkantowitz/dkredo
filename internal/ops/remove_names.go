@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"dkredo/internal/hasher"
+	"dkredo/internal/facts"
 	"dkredo/internal/resolve"
 	"dkredo/internal/stamp"
 )
@@ -35,8 +35,8 @@ func RemoveNames(state *stamp.StampState, args []string, stdin io.Reader, stamps
 			if statErr == nil {
 				continue // file exists, don't remove
 			}
-			facts := hasher.ParseFacts(m.Facts)
-			if facts["missing"] == "true" {
+			parsed := facts.ParseFacts(m.Facts)
+			if parsed["missing"] == "true" {
 				continue // intentionally tracked as absent
 			}
 			if verbose {

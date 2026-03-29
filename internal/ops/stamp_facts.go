@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"dkredo/internal/hasher"
+	"dkredo/internal/facts"
 	"dkredo/internal/resolve"
 	"dkredo/internal/stamp"
 )
@@ -27,16 +27,16 @@ func StampFacts(state *stamp.StampState, args []string, stdin io.Reader, stampsP
 			continue
 		}
 		fullPath := filepath.Join(stampsParent, e.Path)
-		facts, err := hasher.FileFacts(fullPath)
+		factsStr, err := facts.FileFacts(fullPath)
 		if err != nil {
 			return fmt.Errorf("+stamp-facts: %w", err)
 		}
-		e.Facts = facts
+		e.Facts = factsStr
 		state.Modified = true
 		count++
 
 		if verbose {
-			fmt.Fprintf(os.Stderr, "  %s %s\n", e.Path, facts)
+			fmt.Fprintf(os.Stderr, "  %s %s\n", e.Path, factsStr)
 		}
 	}
 

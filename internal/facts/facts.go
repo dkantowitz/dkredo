@@ -1,4 +1,4 @@
-package hasher
+package facts
 
 import (
 	"encoding/hex"
@@ -20,20 +20,20 @@ func FileFacts(path string) (string, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return "missing:true", nil
 		}
-		return "", fmt.Errorf("hasher: stat %s: %w", path, err)
+		return "", fmt.Errorf("facts: stat %s: %w", path, err)
 	}
 
 	size := info.Size()
 
 	f, err := os.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("hasher: open %s: %w", path, err)
+		return "", fmt.Errorf("facts: open %s: %w", path, err)
 	}
 	defer f.Close()
 
 	h := blake3.New()
 	if _, err := io.Copy(h, f); err != nil {
-		return "", fmt.Errorf("hasher: read %s: %w", path, err)
+		return "", fmt.Errorf("facts: read %s: %w", path, err)
 	}
 
 	sum := h.Sum(nil)
@@ -90,7 +90,7 @@ func CheckFact(path string, recordedFacts string) (bool, string, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, "", nil // still missing, unchanged
 		}
-		return false, "", fmt.Errorf("hasher: stat %s: %w", path, err)
+		return false, "", fmt.Errorf("facts: stat %s: %w", path, err)
 	}
 
 	// File should exist
@@ -99,7 +99,7 @@ func CheckFact(path string, recordedFacts string) (bool, string, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return true, "file disappeared", nil
 		}
-		return false, "", fmt.Errorf("hasher: stat %s: %w", path, err)
+		return false, "", fmt.Errorf("facts: stat %s: %w", path, err)
 	}
 
 	// Size fast path
@@ -117,13 +117,13 @@ func CheckFact(path string, recordedFacts string) (bool, string, error) {
 	if hashStr, ok := facts["blake3"]; ok {
 		f, err := os.Open(path)
 		if err != nil {
-			return false, "", fmt.Errorf("hasher: open %s: %w", path, err)
+			return false, "", fmt.Errorf("facts: open %s: %w", path, err)
 		}
 		defer f.Close()
 
 		h := blake3.New()
 		if _, err := io.Copy(h, f); err != nil {
-			return false, "", fmt.Errorf("hasher: read %s: %w", path, err)
+			return false, "", fmt.Errorf("facts: read %s: %w", path, err)
 		}
 		sum := h.Sum(nil)
 		currentHash := hex.EncodeToString(sum[:])
