@@ -7,9 +7,7 @@ effort: [Unknown|Trivial|Small|Medium|Large]
 assignee: [claude|human]
 created_date: YYYY-MM-DD
 labels: [bugfix|enhancement|feature, core]
-swimlane: [Core Library|Tooling/Backflow|Tooling/Claude Environment|Publication|Core Documentation]
-phase: {{int}}
-depends_on: []
+swimlane: [Core|Tooling|Infrastructure|Documentation|Testing]
 source_file: {{file}}:{{line}}
 ---
 
@@ -49,13 +47,15 @@ func TestDescriptionOfExpectedBehavior(t *testing.T) {
 
 ### REFACTOR
 
-- Cleanup or follow-up improvements
+1. Identify cleanup or follow-up improvements.
+2. Perform the improvements.
+3. Retest the GREEN stage unit tests. Modifying unit tests should not be necessary; if unit tests are modified during the REFACTOR stage, make note of that in the backlog ticket report.
 
 <!-- ## Results
 
-### Implementation
+### Complexity Metrics
 
-### Issues
+Run `./scripts/backlog.py complexity-summary` and paste output here.
 
 -->
 
@@ -65,7 +65,7 @@ List attached resources if this ticket has a .attachments/ directory.
 Remove this section if there are no attachments.
 
 Example:
-- `style-lab-results.json` — Converged design tokens from 542 voting rounds
+- `test-data.json` — Sample input that triggers the bug
 - `screenshot-broken-layout.png` — Visual evidence of the rendering bug
 
 -->
