@@ -42,7 +42,7 @@ build:
     dkredo build.out +remove-names +add-names src/main.c src/util.c +stamp-facts
 ```
 
-See [`dkredo.md`](dkredo.md) for the full list of operations.
+See [`dkredo.md`](docs/dkredo.md) for the full list of operations.
 
 ## Install
 
@@ -109,8 +109,8 @@ re-runs when a previously absent file appears.
 
 ## Tutorial
 
-See [`tutorial/`](tutorial/) for a hands-on walkthrough you can run locally.
+See [`tutorial/`](docs/tutorial/) for a hands-on walkthrough you can run locally.
 
 ## Reference
 
-See [`dkredo.md`](dkredo.md) for the full specification.
+See [`dkredo.md`](docs/dkredo.md) for the full specification.

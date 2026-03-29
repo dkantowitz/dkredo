@@ -1,2 +1,6 @@
 .devcontainer/
 _djk_claude/
+coverage.out
+.stamps/
+dkredo
+
