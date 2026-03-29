@@ -1,0 +1,433 @@
+dkredo := justfile_directory() / ".." / "dkredo"
+
+# Helper: run a command and capture its exit code safely under set -e
+# Usage: rc=0; run_rc COMMAND ARGS... ; then check $rc
+# We use functions in each recipe instead.
+
+# --- Operation Pipeline Tests ---
+
+test-guard-build-stamp-cycle:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "hello" > a.c
+    {{dkredo}} test +add-names a.c +stamp-facts
+    rc=0; {{dkredo}} test +check || rc=$?
+    [ "$rc" -eq 1 ] || { echo "FAIL: expected unchanged (1), got $rc"; exit 1; }
+    echo "modified" > a.c
+    rc=0; {{dkredo}} test +check || rc=$?
+    [ "$rc" -eq 0 ] || { echo "FAIL: expected changed (0), got $rc"; exit 1; }
+    echo "PASS: guard-build-stamp cycle"
+
+test-file-change-triggers-rebuild:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "v1" > a.c
+    {{dkredo}} test +add-names a.c +stamp-facts
+    rc=0; {{dkredo}} test +check || rc=$?
+    [ "$rc" -eq 1 ] || exit 1
+    echo "v2" > a.c
+    rc=0; {{dkredo}} test +check || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    echo "PASS: file change triggers rebuild"
+
+test-name-addition-persists-across-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "data" > a.c
+    {{dkredo}} test +add-names a.c +stamp-facts
+    echo "data" > b.c
+    rc=0; {{dkredo}} test +add-names b.c +check || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    grep -q "b.c" .stamps/test || { echo "FAIL: b.c not in stamp"; exit 1; }
+    echo "PASS: name addition persists across +check"
+
+test-remove-names-stamp-facts-pipeline:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "a" > a.c && echo "b" > b.c && echo "c" > c.c
+    {{dkredo}} test +add-names a.c b.c c.c +stamp-facts
+    {{dkredo}} test +remove-names b.c
+    {{dkredo}} test +stamp-facts
+    [ "$(wc -l < .stamps/test)" -eq 2 ] || { echo "FAIL: expected 2 entries"; exit 1; }
+    echo "PASS: remove-names + stamp-facts pipeline"
+
+test-clear-facts-forces-recheck:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "data" > a.c
+    {{dkredo}} test +add-names a.c +stamp-facts
+    rc=0; {{dkredo}} test +check || rc=$?
+    [ "$rc" -eq 1 ] || exit 1
+    {{dkredo}} test +clear-facts
+    rc=0; {{dkredo}} test +check || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    echo "PASS: clear-facts forces recheck"
+
+test-missing-file-bootstrapping:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    {{dkredo}} test +add-names nonexistent.c +stamp-facts
+    grep -q "missing:true" .stamps/test || exit 1
+    echo "now exists" > nonexistent.c
+    rc=0; {{dkredo}} test +check || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    echo "PASS: missing file bootstrapping"
+
+test-depfile-integration:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps .deps src include
+    echo "data" > src/main.c
+    echo "header" > include/config.h
+    printf "out.o: src/main.c include/config.h\n" > .deps/out.d
+    {{dkredo}} test +add-names -M .deps/out.d +stamp-facts
+    grep -q "src/main.c" .stamps/test || { echo "FAIL: main.c not in stamp"; exit 1; }
+    grep -q "include/config.h" .stamps/test || { echo "FAIL: config.h not in stamp"; exit 1; }
+    echo "PASS: depfile integration"
+
+# --- Alias (--cmd) Tests ---
+
+test-cmd-ifchange-equivalence:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "data" > a.c
+    rc=0; {{dkredo}} test1 --cmd ifchange a.c || rc=$?
+    rc=0; {{dkredo}} test2 +add-names a.c +check || rc=$?
+    diff .stamps/test1 .stamps/test2 || { echo "FAIL: stamps differ"; exit 1; }
+    echo "PASS: --cmd ifchange equivalence"
+
+test-cmd-stamp-equivalence:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "data" > a.c
+    {{dkredo}} test1 --cmd stamp a.c
+    {{dkredo}} test2 +remove-names +add-names a.c +stamp-facts
+    diff .stamps/test1 .stamps/test2 || { echo "FAIL: stamps differ"; exit 1; }
+    echo "PASS: --cmd stamp equivalence"
+
+test-cmd-stamp-append:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "old" > old.c && echo "new" > new.c
+    {{dkredo}} test +add-names old.c +stamp-facts
+    {{dkredo}} test --cmd stamp --append new.c
+    grep -q "old.c" .stamps/test || { echo "FAIL: old.c missing"; exit 1; }
+    grep -q "new.c" .stamps/test || { echo "FAIL: new.c missing"; exit 1; }
+    echo "PASS: --cmd stamp --append"
+
+test-cmd-always:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "data" > a.c
+    {{dkredo}} test +add-names a.c +stamp-facts
+    rc=0; {{dkredo}} test +check || rc=$?
+    [ "$rc" -eq 1 ] || exit 1
+    {{dkredo}} test --cmd always
+    rc=0; {{dkredo}} test +check || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    echo "PASS: --cmd always"
+
+test-cmd-fnames:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "data" > a.c && echo "hdr" > b.h
+    {{dkredo}} test +add-names a.c b.h +stamp-facts
+    out=$({{dkredo}} test --cmd fnames .c)
+    [ "$out" = "a.c" ] || { echo "FAIL: expected 'a.c', got '$out'"; exit 1; }
+    echo "PASS: --cmd fnames"
+
+# --- Symlink Dispatch Tests ---
+
+test-symlink-ifchange:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    ln -sf {{dkredo}} dkr-ifchange
+    echo "data" > a.c
+    rc=0; ./dkr-ifchange test a.c || rc=$?
+    [ "$rc" -eq 0 ] || { echo "FAIL: expected exit 0, got $rc"; exit 1; }
+    grep -q "a.c" .stamps/test || { echo "FAIL: a.c not in stamp"; exit 1; }
+    echo "PASS: symlink ifchange"
+
+test-symlink-stamp:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    ln -sf {{dkredo}} dkr-stamp
+    echo "data" > a.c
+    ./dkr-stamp test a.c
+    grep -q "blake3:" .stamps/test || { echo "FAIL: no facts in stamp"; exit 1; }
+    echo "PASS: symlink stamp"
+
+test-symlink-always:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    ln -sf {{dkredo}} dkr-always
+    echo "data" > a.c
+    {{dkredo}} test +add-names a.c +stamp-facts
+    rc=0; {{dkredo}} test +check || rc=$?
+    [ "$rc" -eq 1 ] || exit 1
+    ./dkr-always test
+    rc=0; {{dkredo}} test +check || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    echo "PASS: symlink always"
+
+# --- Edge Cases ---
+
+test-label-with-slash:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "data" > a.c
+    {{dkredo}} "output/config.json" +add-names a.c +stamp-facts
+    [ -f ".stamps/output%2Fconfig.json" ] || { echo "FAIL: escaped label file missing"; exit 1; }
+    echo "PASS: label with slash"
+
+test-stamps-dir-parent-search:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    mkdir -p "$T/.stamps" "$T/subdir"
+    echo "data" > "$T/subdir/a.c"
+    cd "$T/subdir"
+    {{dkredo}} test +add-names a.c +stamp-facts
+    [ -f "$T/.stamps/test" ] || { echo "FAIL: stamp not in parent .stamps/"; exit 1; }
+    echo "PASS: stamps dir parent search"
+
+test-stamps-dir-override:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T"
+    echo "data" > a.c
+    {{dkredo}} --stamps-dir "$T/custom-stamps" test +add-names a.c +stamp-facts
+    [ -f "$T/custom-stamps/test" ] || { echo "FAIL: stamp not in custom dir"; exit 1; }
+    echo "PASS: --stamps-dir override"
+
+test-empty-stamp-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    rc=0; {{dkredo}} test +add-names +check || rc=$?
+    [ "$rc" -eq 1 ] || { echo "FAIL: expected 1 (empty stamp), got $rc"; exit 1; }
+    echo "PASS: empty stamp check"
+
+test-version-flag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out=$({{dkredo}} --version)
+    echo "$out" | grep -q "dkredo" || { echo "FAIL: version output unexpected: $out"; exit 1; }
+    echo "PASS: --version flag"
+
+test-help-flags:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rc=0; {{dkredo}} --help > /dev/null 2>&1 || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    rc=0; {{dkredo}} -h > /dev/null 2>&1 || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    echo "PASS: help flags"
+
+test-unknown-operation:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    rc=0; {{dkredo}} test +bogus 2>/dev/null || rc=$?
+    [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2, got $rc"; exit 1; }
+    echo "PASS: unknown operation"
+
+test-no-operations:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    rc=0; {{dkredo}} test 2>/dev/null || rc=$?
+    [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2, got $rc"; exit 1; }
+    echo "PASS: no operations"
+
+test-verbose-output:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "data" > a.c
+    stderr=$({{dkredo}} -v test +add-names a.c +stamp-facts 2>&1 1>/dev/null)
+    echo "$stderr" | grep -q "add-names" || { echo "FAIL: no verbose add-names output"; exit 1; }
+    echo "$stderr" | grep -q "stamp-facts" || { echo "FAIL: no verbose stamp-facts output"; exit 1; }
+    echo "PASS: verbose output"
+
+test-dkredo-args-env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T"
+    echo "data" > a.c
+    DKREDO_ARGS="--stamps-dir $T/env-stamps" {{dkredo}} test +add-names a.c +stamp-facts
+    [ -f "$T/env-stamps/test" ] || { echo "FAIL: stamp not in env-specified dir"; exit 1; }
+    echo "PASS: DKREDO_ARGS env"
+
+# --- Canonical Patterns ---
+
+test-pattern-basic-file-deps:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "v1" > src.c && echo "v1" > hdr.h
+    rc=0; {{dkredo}} out.bin +add-names src.c hdr.h +check || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    {{dkredo}} out.bin +remove-names +add-names src.c hdr.h +stamp-facts
+    rc=0; {{dkredo}} out.bin +add-names src.c hdr.h +check || rc=$?
+    [ "$rc" -eq 1 ] || exit 1
+    echo "v2" > hdr.h
+    rc=0; {{dkredo}} out.bin +add-names src.c hdr.h +check || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    echo "PASS: basic file deps pattern"
+
+test-pattern-force-rebuild:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "data" > a.c
+    {{dkredo}} out.bin +add-names a.c +stamp-facts
+    rc=0; {{dkredo}} out.bin +check || rc=$?
+    [ "$rc" -eq 1 ] || exit 1
+    {{dkredo}} out.bin +clear-facts
+    rc=0; {{dkredo}} out.bin +check || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    echo "PASS: force rebuild pattern"
+
+test-pattern-side-effect-recipe:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "v1" > config.yaml
+    rc=0; {{dkredo}} deploy-staging +add-names config.yaml +check || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    {{dkredo}} deploy-staging +stamp-facts
+    rc=0; {{dkredo}} deploy-staging +check || rc=$?
+    [ "$rc" -eq 1 ] || exit 1
+    echo "v2" > config.yaml
+    rc=0; {{dkredo}} deploy-staging +check || rc=$?
+    [ "$rc" -eq 0 ] || exit 1
+    echo "PASS: side-effect recipe pattern"
+
+test-check-assert:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "data" > a.c
+    {{dkredo}} test +add-names a.c +stamp-facts
+    rc=0; {{dkredo}} test +check-assert || rc=$?
+    [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 (assert unchanged), got $rc"; exit 1; }
+    echo "v2" > a.c
+    rc=0; {{dkredo}} test +check-assert || rc=$?
+    [ "$rc" -eq 0 ] || { echo "FAIL: expected exit 0 (changed), got $rc"; exit 1; }
+    echo "PASS: check-assert"
+
+test-names-facts-output:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "data" > a.c && echo "hdr" > b.h
+    {{dkredo}} test +add-names a.c b.h +stamp-facts
+    names=$({{dkredo}} test +names)
+    [ "$(echo "$names" | wc -l)" -eq 2 ] || { echo "FAIL: expected 2 names"; exit 1; }
+    names_c=$({{dkredo}} test +names .c)
+    [ "$names_c" = "a.c" ] || { echo "FAIL: expected 'a.c', got '$names_c'"; exit 1; }
+    facts=$({{dkredo}} test +facts)
+    echo "$facts" | grep -q "blake3:" || { echo "FAIL: facts missing blake3"; exit 1; }
+    echo "PASS: names/facts output"
+
+test-remove-names-ne:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    cd "$T" && mkdir -p .stamps
+    echo "exists" > real.c
+    {{dkredo}} test +add-names real.c gone.c +stamp-facts
+    grep -q "missing:true" .stamps/test || { echo "FAIL: no missing:true for gone.c"; exit 1; }
+    {{dkredo}} test +remove-names -ne
+    grep -q "gone.c" .stamps/test || { echo "FAIL: gone.c should NOT be removed (missing:true)"; exit 1; }
+    {{dkredo}} test2 +add-names real.c +stamp-facts
+    rm real.c
+    {{dkredo}} test2 +remove-names -ne
+    ! grep -q "real.c" .stamps/test2 || { echo "FAIL: real.c should be removed by -ne"; exit 1; }
+    echo "PASS: remove-names -ne"
+
+test-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    T=$(mktemp -d)
+    trap "rm -rf $T" EXIT
+    {{dkredo}} --install "$T" 2>/dev/null
+    [ -x "$T/dkredo" ] || { echo "FAIL: dkredo not installed"; exit 1; }
+    [ -L "$T/dkr-ifchange" ] || { echo "FAIL: dkr-ifchange symlink missing"; exit 1; }
+    [ -L "$T/dkr-stamp" ] || { echo "FAIL: dkr-stamp symlink missing"; exit 1; }
+    [ -L "$T/dkr-always" ] || { echo "FAIL: dkr-always symlink missing"; exit 1; }
+    [ -L "$T/dkr-fnames" ] || { echo "FAIL: dkr-fnames symlink missing"; exit 1; }
+    "$T/dkredo" --version | grep -q "dkredo" || { echo "FAIL: installed binary broken"; exit 1; }
+    echo "PASS: --install"
+
+# --- Run All Tests ---
+
+test-all: test-guard-build-stamp-cycle test-file-change-triggers-rebuild test-name-addition-persists-across-check test-remove-names-stamp-facts-pipeline test-clear-facts-forces-recheck test-missing-file-bootstrapping test-depfile-integration test-cmd-ifchange-equivalence test-cmd-stamp-equivalence test-cmd-stamp-append test-cmd-always test-cmd-fnames test-symlink-ifchange test-symlink-stamp test-symlink-always test-label-with-slash test-stamps-dir-parent-search test-stamps-dir-override test-empty-stamp-check test-version-flag test-help-flags test-unknown-operation test-no-operations test-verbose-output test-dkredo-args-env test-pattern-basic-file-deps test-pattern-force-rebuild test-pattern-side-effect-recipe test-check-assert test-names-facts-output test-remove-names-ne test-install
+    @echo ""
+    @echo "ALL INTEGRATION TESTS PASSED"
