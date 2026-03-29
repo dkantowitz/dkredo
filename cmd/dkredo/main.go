@@ -58,12 +58,12 @@ func main() {
 		aliasName := strings.TrimPrefix(argv0, "dkr-")
 
 		// Parse global flags from front of args
-		cfg := Config{}
+		flags := Flags{}
 		i := 0
 		for i < len(args) {
 			switch args[i] {
 			case "-v":
-				cfg.Verbose = true
+				flags.Verbose = true
 				i++
 			case "--stamps-dir":
 				i++
@@ -71,7 +71,7 @@ func main() {
 					fmt.Fprintf(os.Stderr, "error: --stamps-dir requires an argument\n")
 					os.Exit(2)
 				}
-				cfg.StampsDir = args[i]
+				flags.StampsDir = args[i]
 				i++
 			default:
 				goto aliasLabel
@@ -99,12 +99,12 @@ func main() {
 			os.Exit(2)
 		}
 
-		stampsDir := resolveStampsDir(cfg.StampsDir)
-		exitCode := Execute(label, ops, stampsDir, cfg.Verbose, os.Stdin, os.Stdout)
+		flags.StampsDir = resolveStampsDir(flags.StampsDir)
+		exitCode := Execute(label, ops, flags, os.Stdin, os.Stdout)
 		os.Exit(exitCode)
 	}
 
-	cfg, label, operations, err := Parse(args)
+	flags, label, operations, err := Parse(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(2)
@@ -116,8 +116,8 @@ func main() {
 		os.Exit(2)
 	}
 
-	stampsDir := resolveStampsDir(cfg.StampsDir)
-	exitCode := Execute(label, operations, stampsDir, cfg.Verbose, os.Stdin, os.Stdout)
+	flags.StampsDir = resolveStampsDir(flags.StampsDir)
+	exitCode := Execute(label, operations, flags, os.Stdin, os.Stdout)
 	os.Exit(exitCode)
 }
 

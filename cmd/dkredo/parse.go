@@ -11,10 +11,13 @@ type Operation struct {
 	Args []string
 }
 
-// Config holds global CLI configuration.
-type Config struct {
-	Verbose   bool
-	StampsDir string
+// Flags holds all flags that can appear globally or per-operation.
+// Global flags are set before the label. Operation-scoped flags appear
+// after a +operation and override the global defaults for that operation only.
+type Flags struct {
+	Verbose      bool
+	StampsDir    string
+	StampsParent string // resolved by executor, read-only for operations
 }
 
 // ValidOps lists all valid operation names.
@@ -29,24 +32,48 @@ var ValidOps = map[string]bool{
 	"facts":        true,
 }
 
-// Parse parses CLI args (after argv[0]) into config, label, and operations.
+// ExtractFlags removes recognized flags from args, applies them to flags,
+// and returns the remaining args.
+func ExtractFlags(flags *Flags, args []string) []string {
+	var remaining []string
+	i := 0
+	for i < len(args) {
+		switch args[i] {
+		case "-v":
+			flags.Verbose = true
+			i++
+		case "--stamps-dir":
+			i++
+			if i < len(args) {
+				flags.StampsDir = args[i]
+				i++
+			}
+		default:
+			remaining = append(remaining, args[i])
+			i++
+		}
+	}
+	return remaining
+}
+
+// Parse parses CLI args (after argv[0]) into flags, label, and operations.
 // Handles --cmd alias expansion.
-func Parse(args []string) (Config, string, []Operation, error) {
-	cfg := Config{}
+func Parse(args []string) (Flags, string, []Operation, error) {
+	flags := Flags{}
 
 	// Parse global flags from front
 	i := 0
 	for i < len(args) {
 		switch args[i] {
 		case "-v":
-			cfg.Verbose = true
+			flags.Verbose = true
 			i++
 		case "--stamps-dir":
 			i++
 			if i >= len(args) {
-				return cfg, "", nil, fmt.Errorf("--stamps-dir requires an argument")
+				return flags, "", nil, fmt.Errorf("--stamps-dir requires an argument")
 			}
-			cfg.StampsDir = args[i]
+			flags.StampsDir = args[i]
 			i++
 		default:
 			goto labelParse
@@ -55,12 +82,12 @@ func Parse(args []string) (Config, string, []Operation, error) {
 
 labelParse:
 	if i >= len(args) {
-		return cfg, "", nil, fmt.Errorf("missing label argument")
+		return flags, "", nil, fmt.Errorf("missing label argument")
 	}
 
 	label := args[i]
 	if strings.HasPrefix(label, "+") {
-		return cfg, "", nil, fmt.Errorf(
+		return flags, "", nil, fmt.Errorf(
 			"missing label — first argument %q looks like an operation, not a label\n"+
 				"usage: dkredo <label> [+operation [args...]]...", label)
 	}
@@ -70,7 +97,7 @@ labelParse:
 	if i < len(args) && args[i] == "--cmd" {
 		i++
 		if i >= len(args) {
-			return cfg, "", nil, fmt.Errorf("--cmd requires an alias name")
+			return flags, "", nil, fmt.Errorf("--cmd requires an alias name")
 		}
 		aliasName := args[i]
 		i++
@@ -78,7 +105,7 @@ labelParse:
 		// Check for multiple --cmd
 		for _, a := range args[i:] {
 			if a == "--cmd" {
-				return cfg, "", nil, fmt.Errorf("multiple --cmd not allowed")
+				return flags, "", nil, fmt.Errorf("multiple --cmd not allowed")
 			}
 		}
 
@@ -87,30 +114,30 @@ labelParse:
 		// Check that no +ops are mixed with --cmd
 		for _, a := range aliasArgs {
 			if strings.HasPrefix(a, "+") {
-				return cfg, "", nil, fmt.Errorf("--cmd and +operations cannot be mixed")
+				return flags, "", nil, fmt.Errorf("--cmd and +operations cannot be mixed")
 			}
 		}
 
 		expanded, err := ExpandAlias(aliasName, aliasArgs)
 		if err != nil {
-			return cfg, "", nil, err
+			return flags, "", nil, err
 		}
 
 		// Parse expanded ops
 		ops, err := parseOps(expanded)
 		if err != nil {
-			return cfg, "", nil, err
+			return flags, "", nil, err
 		}
-		return cfg, label, ops, nil
+		return flags, label, ops, nil
 	}
 
 	// Parse +operations
 	ops, err := parseOps(args[i:])
 	if err != nil {
-		return cfg, "", nil, err
+		return flags, "", nil, err
 	}
 
-	return cfg, label, ops, nil
+	return flags, label, ops, nil
 }
 
 func parseOps(args []string) ([]Operation, error) {

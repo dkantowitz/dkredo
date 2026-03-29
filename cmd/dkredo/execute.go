@@ -10,10 +10,10 @@ import (
 )
 
 // Execute runs a pipeline of operations on a stamp label.
-func Execute(label string, operations []Operation, stampsDir string, verbose bool, stdin io.Reader, stdout io.Writer) int {
-	stampsParent := stamp.StampsParent(stampsDir)
+func Execute(label string, operations []Operation, globalFlags Flags, stdin io.Reader, stdout io.Writer) int {
+	globalFlags.StampsParent = stamp.StampsParent(globalFlags.StampsDir)
 
-	state, err := stamp.ReadStamp(stampsDir, label, verbose)
+	state, err := stamp.ReadStamp(globalFlags.StampsDir, label, globalFlags.Verbose)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 2
@@ -21,7 +21,10 @@ func Execute(label string, operations []Operation, stampsDir string, verbose boo
 
 	exitCode := 0
 	for _, op := range operations {
-		code, err := runOp(op, state, stdin, stampsParent, stdout, verbose)
+		opFlags := globalFlags // value copy — per-op flags don't leak
+		op.Args = ExtractFlags(&opFlags, op.Args)
+		opFlags.StampsParent = stamp.StampsParent(opFlags.StampsDir)
+		code, err := runOp(op, state, stdin, opFlags.StampsParent, stdout, opFlags.Verbose)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			return 2
@@ -33,7 +36,7 @@ func Execute(label string, operations []Operation, stampsDir string, verbose boo
 	}
 
 	if state.Modified {
-		if err := stamp.WriteStamp(stampsDir, state, verbose); err != nil {
+		if err := stamp.WriteStamp(globalFlags.StampsDir, state, globalFlags.Verbose); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			return 2
 		}

@@ -1,7 +1,7 @@
 ---
 id: 020
 title: Implement scoped flags framework (global and per-operation)
-status: To Do
+status: Done
 priority: 2
 effort: Medium
 assignee: claude
@@ -207,3 +207,50 @@ func TestGlobalPlusOperationLocal(t *testing.T) {
 1. Remove old `Config` struct (replaced by `Flags`).
 2. Ensure `ExtractFlags` is the single point for adding new flags.
 3. Run with `-race`.
+
+## Results
+
+### Approach
+
+Kept the `Flags` struct in `cmd/dkredo/parse.go` and the scoping logic in `cmd/dkredo/execute.go`. The `internal/ops` signatures were **not changed** -- the executor resolves `opFlags.Verbose` and `opFlags.StampsParent` per-operation and passes them as before. This minimizes the blast radius of the refactor.
+
+### Key design decisions
+
+- `ExtractFlags` is a standalone function that strips recognized flags from any arg slice and applies them to a `Flags` struct. Used for global flag parsing (could replace the manual loop in `Parse` in a future cleanup) and for per-operation extraction in `Execute`.
+- Per-operation scoping uses Go value-copy semantics: `opFlags := globalFlags` creates an independent copy, so `ExtractFlags(&opFlags, op.Args)` cannot leak to subsequent operations.
+- `StampsParent` is re-resolved per-operation after flag extraction, supporting a hypothetical per-op `--stamps-dir` override.
+
+### Files modified
+
+- `cmd/dkredo/parse.go` -- `Config` replaced by `Flags` (with `StampsParent` field); added `ExtractFlags`
+- `cmd/dkredo/execute.go` -- `Execute` signature changed to accept `Flags`; per-op flag copy + extraction
+- `cmd/dkredo/main.go` -- Updated both normal and alias paths to use `Flags` and new `Execute` signature
+- `cmd/dkredo/parse_test.go` -- Updated existing tests for `Flags`; added `TestExtractFlags*` and `TestOperationLocal*` tests
+- `cmd/dkredo/execute_test.go` -- Updated existing tests for new `Execute` signature; added `TestExecutePerOpVerbose` and `TestExecutePerOpFlagsDoNotLeak`
+
+### Deviations from plan
+
+- The `internal/ops` signatures were intentionally left unchanged per the instructions, rather than switching to accept a `Flags` struct. This keeps the ops package decoupled from the CLI layer.
+- The global flag parsing in `Parse()` was not refactored to use `ExtractFlags` because `Parse` needs positional stop-on-first-non-flag semantics (the label follows the flags), while `ExtractFlags` scans all args. A future ticket could unify these if desired.
+
+### Verification
+
+- `go test ./...` -- all pass
+- `go vet ./...` -- clean
+- `go test -race ./...` -- clean
+- `just test` -- all pass
+
+### Review notes
+
+Reviewed 2026-03-28. Implementation is correct and well-structured:
+
+- `ExtractFlags` correctly handles `-v` and `--stamps-dir` extraction from arg slices
+- Per-op value-copy semantics (`opFlags := globalFlags`) properly prevents flag leakage between operations
+- `StampsParent` is re-resolved per-op after flag extraction, correctly supporting per-op `--stamps-dir` overrides
+- `internal/ops` signatures intentionally unchanged -- good separation of concerns
+- Old `Config` type fully removed, no references remain
+
+Issues found and fixed during review:
+
+- The worktree was branched before ticket 018 (missing-label detection) was completed, so `parse.go` was missing the `strings.HasPrefix(label, "+")` guard and `parse_test.go` was missing `TestParseMissingLabelWithOperation`. Both restored.
+- `backlog/018-improve-error-messages.md` was reverted to `To Do` state; restored from main.
