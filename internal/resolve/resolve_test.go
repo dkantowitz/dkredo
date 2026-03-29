@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"dkredo/internal/stamp"
 )
 
 func TestResolveFilesPositional(t *testing.T) {
@@ -181,5 +183,159 @@ func TestIsSuffixFilter(t *testing.T) {
 	}
 	if isSuffixFilter(".") {
 		t.Fatal(". alone should not be suffix filter")
+	}
+}
+
+// --- ResolveFilters tests ---
+
+func TestResolveFiltersSuffixPassthrough(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldWd)
+
+	result, err := ResolveFilters([]string{".c", ".h"}, nil, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 filters, got %d: %v", len(result), result)
+	}
+	if result[0] != ".c" {
+		t.Fatalf("expected .c, got %s", result[0])
+	}
+	if result[1] != ".h" {
+		t.Fatalf("expected .h, got %s", result[1])
+	}
+}
+
+func TestResolveFiltersMixed(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldWd)
+
+	result, err := ResolveFilters([]string{".c", "src/main.c"}, nil, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 filters, got %d: %v", len(result), result)
+	}
+	// Suffix filter should be first (preserved order), path should be canonicalized
+	if result[0] != ".c" {
+		t.Fatalf("expected .c as first filter, got %s", result[0])
+	}
+	if result[1] != "src/main.c" {
+		t.Fatalf("expected src/main.c as second filter, got %s", result[1])
+	}
+}
+
+func TestResolveFiltersEmpty(t *testing.T) {
+	dir := t.TempDir()
+	result, err := ResolveFilters(nil, nil, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 0 {
+		t.Fatalf("expected 0 filters, got %d: %v", len(result), result)
+	}
+}
+
+func TestResolveFiltersWithFileInput(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldWd)
+
+	listFile := filepath.Join(dir, "filter-list.txt")
+	os.WriteFile(listFile, []byte("src/a.c\nsrc/b.h\n"), 0644)
+
+	result, err := ResolveFilters([]string{".c", "-@", listFile}, nil, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// .c suffix + 2 paths from file = 3
+	if len(result) != 3 {
+		t.Fatalf("expected 3 filters, got %d: %v", len(result), result)
+	}
+	if result[0] != ".c" {
+		t.Fatalf("expected .c as first filter, got %s", result[0])
+	}
+}
+
+// --- FilterEntries tests ---
+
+func TestFilterEntriesEmptyFilter(t *testing.T) {
+	entries := []stamp.Entry{
+		{Path: "src/main.c"},
+		{Path: "src/util.h"},
+		{Path: "src/lib.c"},
+	}
+	result := FilterEntries(entries, nil)
+	if len(result) != 3 {
+		t.Fatalf("expected all 3 entries, got %d", len(result))
+	}
+}
+
+func TestFilterEntriesBySuffix(t *testing.T) {
+	entries := []stamp.Entry{
+		{Path: "src/main.c"},
+		{Path: "src/util.h"},
+		{Path: "src/lib.c"},
+	}
+	result := FilterEntries(entries, []string{".c"})
+	if len(result) != 2 {
+		t.Fatalf("expected 2 .c entries, got %d: %v", len(result), result)
+	}
+	for _, e := range result {
+		if filepath.Ext(e.Path) != ".c" {
+			t.Fatalf("expected .c file, got %s", e.Path)
+		}
+	}
+}
+
+func TestFilterEntriesByExactPath(t *testing.T) {
+	entries := []stamp.Entry{
+		{Path: "src/main.c"},
+		{Path: "src/util.h"},
+		{Path: "src/lib.c"},
+	}
+	result := FilterEntries(entries, []string{"src/util.h"})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 entry, got %d: %v", len(result), result)
+	}
+	if result[0].Path != "src/util.h" {
+		t.Fatalf("expected src/util.h, got %s", result[0].Path)
+	}
+}
+
+func TestFilterEntriesNoMatch(t *testing.T) {
+	entries := []stamp.Entry{
+		{Path: "src/main.c"},
+		{Path: "src/util.h"},
+	}
+	result := FilterEntries(entries, []string{".py"})
+	if len(result) != 0 {
+		t.Fatalf("expected 0 entries, got %d: %v", len(result), result)
+	}
+}
+
+func TestFilterEntriesMultipleFilters(t *testing.T) {
+	entries := []stamp.Entry{
+		{Path: "src/main.c"},
+		{Path: "src/util.h"},
+		{Path: "src/lib.go"},
+		{Path: "src/extra.c"},
+	}
+	result := FilterEntries(entries, []string{".c", ".h"})
+	if len(result) != 3 {
+		t.Fatalf("expected 3 entries (.c and .h), got %d: %v", len(result), result)
+	}
+	for _, e := range result {
+		ext := filepath.Ext(e.Path)
+		if ext != ".c" && ext != ".h" {
+			t.Fatalf("unexpected file %s", e.Path)
+		}
 	}
 }

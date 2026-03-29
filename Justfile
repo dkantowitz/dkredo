@@ -20,7 +20,44 @@ test-integration: build
 
 test-all: test test-integration
 
+# Get the latest version tag, defaulting to v0.0.0
+_latest-version:
+    @git tag -l 'v*' --sort=-v:refname | head -1 | grep . || echo "v0.0.0"
+
+# Bump minor version and push tag (v0.1.0 → v0.2.0)
+release-minor: test
+    #!/usr/bin/env bash
+    set -euo pipefail
+    current=$(just _latest-version)
+    major=$(echo "$current" | sed 's/v//' | cut -d. -f1)
+    minor=$(echo "$current" | sed 's/v//' | cut -d. -f2)
+    next="v${major}.$((minor + 1)).0"
+    echo "Releasing $current → $next"
+    git tag -a "$next" -m "Release $next"
+    git push origin "$next"
+    echo "Pushed tag $next — release workflow will build and publish"
+
+# Bump major version and push tag (v0.2.0 → v1.0.0)
+release-major: test
+    #!/usr/bin/env bash
+    set -euo pipefail
+    current=$(just _latest-version)
+    major=$(echo "$current" | sed 's/v//' | cut -d. -f1)
+    next="v$((major + 1)).0.0"
+    echo "Releasing $current → $next"
+    git tag -a "$next" -m "Release $next"
+    git push origin "$next"
+    echo "Pushed tag $next — release workflow will build and publish"
+
 cover-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
     go test -coverprofile=coverage.out -covermode=atomic ./internal/...
-    @go tool cover -func=coverage.out | grep ^total | awk '{print $$3}' | \
-        awk -F. '{if ($$1 < 80) {print "FAIL: coverage " $$1 "% < 80%"; exit 1} else {print "OK: coverage " $$1 "%"}}'
+    pct=$(go tool cover -func=coverage.out | grep ^total | awk '{print $NF}' | tr -d '%')
+    int=${pct%%.*}
+    if [ "$int" -lt 80 ]; then
+        echo "FAIL: coverage ${int}% < 80%"
+        exit 1
+    else
+        echo "OK: coverage ${int}%"
+    fi
