@@ -59,6 +59,8 @@ func runOp(op Operation, state *stamp.StampState, stdin io.Reader, stampsParent 
 		return ops.Check(state, op.Args, stdin, stampsParent, verbose)
 	case "check-assert":
 		return ops.CheckAssert(state, op.Args, stdin, stampsParent, verbose)
+	case "check-all":
+		return ops.CheckAll(state, op.Args, stdin, stampsParent, verbose)
 	case "names":
 		return 0, ops.Names(state, op.Args, stampsParent, stdout, verbose)
 	case "facts":

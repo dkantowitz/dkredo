@@ -28,6 +28,7 @@ var ValidOps = map[string]bool{
 	"clear-facts":  true,
 	"check":        true,
 	"check-assert": true,
+	"check-all":    true,
 	"names":        true,
 	"facts":        true,
 }
