@@ -138,37 +138,39 @@ func resolveStampsDir(override string) string {
 }
 
 func printShortHelp() {
-	fmt.Fprintf(os.Stderr, `Usage: dkredo [flags] <label> [+operation [args...]]...
+	fmt.Fprintf(os.Stderr, `Usage: dkredo [flags] <label> [+operation [flags] [args...]]...
 
 Flags:
-  -v               Verbose output
-  --stamps-dir D   Override .stamps/ directory
-  --version        Print version
+  --cmd ALIAS      Expand a built-in alias (ifchange, stamp, always, fnames)
   --help           Full help
   -h               Short help
-  --cmd ALIAS      Expand built-in alias
+  --install DIR    Copy binary and symlinks to DIR
+  --stamps-dir D   Override .stamps/ directory [global, operations]
+  --version        Print version
+  -v               Verbose output [global, operations]
 
 Operations: +add-names, +remove-names, +stamp-facts, +clear-facts,
-            +check, +check-assert, +names, +facts
+            +check, +check-all, +check-assert, +names, +facts
 `)
 }
 
 func printFullHelp() {
 	fmt.Printf(`dkredo — composable file change detection
 
-Usage: dkredo [flags] <label> [+operation [args...]]...
+Usage: dkredo [flags] <label> [+operation [flags] [args...]]...
 
 Operations execute left to right on a single label's stamp file.
 
 FLAGS
-  -v                 Verbose output to stderr
-  --stamps-dir DIR   Override .stamps/ directory location
-  --version          Print version and exit
-  --help             Show this help
-  -h                 Show short help
-  --cmd ALIAS        Expand a built-in alias (ifchange, stamp, always, fnames)
-  --install DIR      Install binary and symlinks to DIR
+  --cmd ALIAS      Expand a built-in alias (ifchange, stamp, always, fnames)
+  --help           Full help
+  -h               Short help
+  --install DIR    Copy binary and symlinks to DIR
+  --stamps-dir D   Override .stamps/ directory [global, operations]
+  --version        Print version
+  -v               Verbose output [global, operations]
 
+  
 STAMP MANIPULATION
   +add-names [files...]          Add files to stamp's name list
   +remove-names [filters...]     Remove matching entries (empty = all)
@@ -183,6 +185,7 @@ QUERYING
 
 VERIFYING
   +check [filters...]            Exit 0=changed, 1=unchanged, 2=error
+  +check-all [filters...]        Like +check but verifies all entries, not just first
   +check-assert [filters...]     Like +check but exit 2 when unchanged
 
 INPUT MODES (for file arguments)
