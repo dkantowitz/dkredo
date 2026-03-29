@@ -3,12 +3,12 @@
 Content-hash change detection for [just](https://github.com/casey/just) recipes.
 
 ## Why?
+
 `just` runs recipes but doesn't track whether inputs changed.
-`make` is a fifty-year-old build tool that is awkward for most scripting tasks.
+`make` is fifty years old and awkward for most scripting tasks.
 `redo` is simple, but it replaces the familiar makefile-style workflow.
 
-dkredo adds **content-hash guards** to just recipes — a recipe runs only when its inputs actually change.
-
+dkredo adds redo-inspired **file content-hash guards** to justfile recipes: make-like syntax, redo-like simplicity.
 
 ```just
 set guards
@@ -16,18 +16,17 @@ set guards
 build:
     ?dkr-ifchange build.out src/main.c src/util.c
     gcc -o build.out src/main.c src/util.c
-    dkr-stamp build.out src/main.c src/util.c
+    dkr-stamp build.out
 
 clean:
     dkr-always build.out
 ```
 
 - `?dkr-ifchange` — skip the recipe if nothing changed (exit 1 + `?` sigil = silent skip)
-- `dkr-stamp` — record the current state after a successful build
+- `dkr-stamp` — record the current state of inputs after a successful build
 - `dkr-always` — clear the stamp's facts so the next run rebuilds
 
-That's the whole idea. No `.do` scripts, no build orchestrator — your justfile
-_is_ the build description.
+That's the whole idea. No `.do` scripts, no build orchestrator — justfile recipes _are_ the makefile.
 
 ### Composable operations
 
@@ -39,7 +38,7 @@ compose operations directly:
 build:
     ?dkredo build.out +add-names src/main.c src/util.c +check
     gcc -o build.out src/main.c src/util.c
-    dkredo build.out +remove-names +add-names src/main.c src/util.c +stamp-facts
+    dkredo build.out +stamp-facts
 ```
 
 See [`dkredo.md`](docs/dkredo.md) for the full list of operations.
@@ -70,23 +69,25 @@ set guards
 generate-config:
     ?dkr-ifchange output/config.json config.yaml templates/*.j2
     render-config config.yaml -o output/config.json
-    dkr-stamp output/config.json config.yaml templates/*.j2
+    dkr-stamp output/config.json
 
-# ── Compile firmware ─────────────────────────────────────────────
+# ── Compile firmware (operations syntax) ───────────────────────
 firmware:
-    ?dkr-ifchange firmware.bin src/*.c include/*.h
-    arm-none-eabi-gcc -o firmware.bin src/*.c -Iinclude/
-    dkr-stamp firmware.bin src/*.c include/*.h
+    ?dkredo firmware.bin +add-names src/*.c include/*.h
+    arm-none-eabi-gcc -o firmware.bin $(dkredo +names -e .c) -Iinclude/
+    dkr-stamp firmware.bin
 
 # ── Deploy only when source or config changed ───────────────────
 deploy-staging:
     ?dkr-ifchange deploy-staging src/*.py config/staging.yaml
     kubectl apply -f k8s/staging/
-    dkr-stamp deploy-staging src/*.py config/staging.yaml
+    dkr-stamp deploy-staging
 
 # ── Force-rebuild any label ──────────────────────────────────────
 clean:
-    dkr-always firmware.bin output/config.json deploy-staging
+    dkr-always firmware.bin
+    dkr-always output/config.json
+    dkr-always deploy-staging
 ```
 
 ### The label
@@ -114,3 +115,7 @@ See [`tutorial/`](docs/tutorial/) for a hands-on walkthrough you can run locally
 ## Reference
 
 See [`dkredo.md`](docs/dkredo.md) for the full specification.
+
+## Future Work
+
+See [`future-work.md`](docs/future-work.md) for planned Phase 2 and Phase 3 features, including diagnostic query tools (`dkr-ood`, `dkr-affects`), glob filters, and transitive dependency tracking.
