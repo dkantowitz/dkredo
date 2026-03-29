@@ -59,6 +59,11 @@ labelParse:
 	}
 
 	label := args[i]
+	if strings.HasPrefix(label, "+") {
+		return cfg, "", nil, fmt.Errorf(
+			"missing label — first argument %q looks like an operation, not a label\n"+
+				"usage: dkredo <label> [+operation [args...]]...", label)
+	}
 	i++
 
 	// Check for --cmd

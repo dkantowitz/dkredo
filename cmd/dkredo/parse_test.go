@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseLabel(t *testing.T) {
 	_, label, ops, err := Parse([]string{"my-label", "+add-names", "a.c", "b.c"})
@@ -90,6 +93,16 @@ func TestParseMissingLabel(t *testing.T) {
 	_, _, _, err := Parse([]string{})
 	if err == nil {
 		t.Fatal("expected error for missing label")
+	}
+}
+
+func TestParseMissingLabelWithOperation(t *testing.T) {
+	_, _, _, err := Parse([]string{"+add-names", "a.c"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "missing label") {
+		t.Fatalf("expected 'missing label' error, got: %v", err)
 	}
 }
 
