@@ -1,7 +1,7 @@
 ---
 id: 015
 title: Implement --install command for binary and symlink setup
-status: To Do
+status: Done
 priority: 3
 effort: Small
 assignee: claude
@@ -125,3 +125,12 @@ echo $?  # 0
 dkredo --install /nonexistent
 echo $?  # 2
 ```
+
+## Results
+
+### Files Created
+- `cmd/dkredo/install.go` — Install function, copyFile helper, aliasSymlinks list
+- `cmd/dkredo/install_test.go` — 3 tests (symlink creation, missing dir, not writable)
+
+### Deviations
+None. Symlinks are relative as specified. --install handled as early exit in main.go.

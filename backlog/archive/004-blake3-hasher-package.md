@@ -1,7 +1,7 @@
 ---
 id: 004
 title: Implement BLAKE3 hasher package for file fact computation
-status: To Do
+status: Done
 priority: 1
 effort: Small
 assignee: claude
@@ -131,3 +131,15 @@ func TestCheckFactUnknownKey(t *testing.T) {
 1. Ensure large file handling works (don't read entire file into memory — use streaming BLAKE3).
 2. Verify error messages include the file path for diagnostics.
 3. Run with `-race`.
+
+## Results
+
+### Files Created
+- `internal/hasher/hasher.go` — FileFacts, ParseFacts, CheckFact, KnownFactKeys
+- `internal/hasher/hasher_test.go` — 17 tests covering all fact computation and verification paths
+
+### Coverage
+`internal/hasher`: 87.1% of statements
+
+### Deviations
+None. Streaming BLAKE3 via io.Copy as recommended in REFACTOR.

@@ -1,7 +1,7 @@
 ---
 id: 003
 title: Implement stamp file I/O with atomic writes, label escaping, and directory search
-status: To Do
+status: Done
 priority: 1
 effort: Medium
 assignee: claude
@@ -183,3 +183,17 @@ func TestPathsAreProjectRelative(t *testing.T) {
 # 2. Label with "/" creates correctly-escaped filename
 # 3. Stamp content matches expected format (tab-separated, sorted)
 ```
+
+## Results
+
+### Files Created
+- `internal/stamp/escape.go` — EscapeLabel/UnescapeLabel, EncodePath/DecodePath
+- `internal/stamp/escape_test.go` — roundtrip tests for label and path encoding
+- `internal/stamp/io.go` — ReadStamp, WriteStamp, FindStampsDir, StampsDir, StampPath, StampsParent
+- `internal/stamp/io_test.go` — I/O roundtrip, atomic write, directory search tests
+
+### Coverage
+`internal/stamp`: 77.5% of statements
+
+### Deviations
+None. All GREEN and REFACTOR steps completed as planned.

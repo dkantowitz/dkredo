@@ -1,7 +1,7 @@
 ---
 id: 011
 title: Implement +names and +facts query operations
-status: To Do
+status: Done
 priority: 2
 effort: Small
 assignee: claude
@@ -160,3 +160,13 @@ dkredo test2 +names -e       # prints: a.c (gone.c excluded)
 # Facts for debugging
 dkredo test +facts           # prints tab-delimited path+facts
 ```
+
+## Results
+
+### Files Created
+- `internal/ops/names.go` — Names operation with -e flag
+- `internal/ops/facts.go` — Facts operation
+- `internal/ops/names_test.go` — 8 tests covering names, facts, filters, and -e
+
+### Deviations
+During code review, inline filtering in Names/Facts was refactored to use resolve.FilterEntries() for consistency with other operations.

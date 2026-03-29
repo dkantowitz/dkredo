@@ -1,7 +1,7 @@
 ---
 id: 009
 title: Implement +clear-facts operation
-status: To Do
+status: Done
 priority: 2
 effort: Trivial
 assignee: claude
@@ -96,3 +96,12 @@ dkredo test +check        # exit 1 (unchanged)
 dkredo test +clear-facts
 dkredo test +check        # exit 0 (changed — no facts to verify)
 ```
+
+## Results
+
+### Files Created
+- `internal/ops/clear_facts.go` — ClearFacts operation
+- `internal/ops/clear_facts_test.go` — 3 tests
+
+### Deviations
+None. Idempotent clearing (empty→empty does not set Modified).

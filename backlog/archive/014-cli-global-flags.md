@@ -1,7 +1,7 @@
 ---
 id: 014
 title: Implement global CLI flags (--version, --help, --stamps-dir, -v, DKREDO_ARGS)
-status: To Do
+status: Done
 priority: 2
 effort: Medium
 assignee: claude
@@ -201,3 +201,12 @@ ls /tmp/env-stamps/test    # stamp file exists
 DKREDO_ARGS='--stamps-dir "/tmp/my stamps"' dkredo test +stamp-facts
 ls "/tmp/my stamps/test"   # stamp file exists
 ```
+
+## Results
+
+### Files Created
+- `cmd/dkredo/shellsplit.go` — POSIX shell splitting for DKREDO_ARGS
+- `cmd/dkredo/shellsplit_test.go` — 6 tests for quoting and escaping
+
+### Deviations
+--version, --help, -h, --stamps-dir, and -v were partially implemented during ticket 012 (parser/executor). This ticket completed DKREDO_ARGS support and shellsplit. All flags verified working with both +operation and alias invocation styles.

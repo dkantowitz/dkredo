@@ -1,7 +1,7 @@
 ---
 id: 016
 title: Implement justfile-based integration tests for all documented use patterns
-status: To Do
+status: Done
 priority: 2
 effort: Large
 assignee: claude
@@ -316,3 +316,20 @@ test-all: test-guard-build-stamp-cycle test-name-addition-persists-across-check 
 3. Add depfile integration test (requires creating a mock .d file).
 4. Add -@ file input integration test.
 5. Consider adding timing assertions for performance budget (optional).
+
+## Results
+
+### Files Created
+- `test/justfile` — 31 integration test recipes
+- `Justfile` — added `test-integration` and `test-all` targets
+
+### Test Categories Implemented
+- Operation pipeline tests (7 tests)
+- Alias --cmd equivalence tests (5 tests)
+- Symlink dispatch tests (3 tests)
+- Edge cases (8 tests: label escaping, dir search, override, empty stamp, version, help, errors, verbose)
+- Canonical patterns (3 tests: file deps, force rebuild, side-effect recipe)
+- Additional verifications (5 tests: check-assert, names/facts output, -ne removal, install)
+
+### Deviations
+Depfile integration and -@ file input tests were included in the main suite (not deferred as the REFACTOR section suggested). Timing assertions deferred as optional.

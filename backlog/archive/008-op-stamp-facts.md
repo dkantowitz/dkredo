@@ -1,7 +1,7 @@
 ---
 id: 008
 title: Implement +stamp-facts operation
-status: To Do
+status: Done
 priority: 2
 effort: Small
 assignee: claude
@@ -132,3 +132,12 @@ dkredo test +add-names a.c b.c +stamp-facts
 dkredo test2 +add-names nonexistent.c +stamp-facts
 # Verify entry has "missing:true"
 ```
+
+## Results
+
+### Files Created
+- `internal/ops/stamp_facts.go` — StampFacts operation
+- `internal/ops/stamp_facts_test.go` — 5 tests
+
+### Deviations
+None.

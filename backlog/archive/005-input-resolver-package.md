@@ -1,7 +1,7 @@
 ---
 id: 005
 title: Implement input resolver for file args, stdin, file-input, depfile, and filters
-status: To Do
+status: Done
 priority: 1
 effort: Medium
 assignee: claude
@@ -191,3 +191,18 @@ func TestParseDepfileMalformed(t *testing.T) {
 1. Extract stdin reading into helper to avoid duplication between `-` and `-0`.
 2. Ensure error messages identify which input mode failed (e.g., "reading from -@ list.txt: ...").
 3. Run with `-race`.
+
+## Results
+
+### Files Created
+- `internal/resolve/resolve.go` — ResolveFiles, ResolveFilters, MatchesFilter, canonicalize, dedup, readLines, readNullTerminated
+- `internal/resolve/resolve_test.go` — 16 tests for all input modes
+- `internal/resolve/depfile.go` — ParseDepfile, depfile parsing with continuation lines and escaped spaces
+- `internal/resolve/depfile_test.go` — 7 tests for depfile edge cases
+- `internal/resolve/filter.go` — FilterEntries helper
+
+### Coverage
+`internal/resolve`: 60.1% of statements (ResolveFilters exercised indirectly via ops tests)
+
+### Deviations
+None. All input modes implemented as specified.

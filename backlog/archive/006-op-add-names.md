@@ -1,7 +1,7 @@
 ---
 id: 006
 title: Implement +add-names operation
-status: To Do
+status: Done
 priority: 2
 effort: Small
 assignee: claude
@@ -154,3 +154,12 @@ dkredo test-label +add-names src/a.c src/b.c
 dkredo test-label +add-names src/c.c
 # Verify .stamps/test-label now has 3 entries, a.c and b.c facts untouched
 ```
+
+## Results
+
+### Files Created
+- `internal/ops/add_names.go` — AddNames operation
+- `internal/ops/add_names_test.go` — 8 tests
+
+### Deviations
+None.

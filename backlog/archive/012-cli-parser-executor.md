@@ -1,7 +1,7 @@
 ---
 id: 012
 title: Implement CLI parser and operation executor pipeline
-status: To Do
+status: Done
 priority: 1
 effort: Medium
 assignee: claude
@@ -185,3 +185,15 @@ echo $?  # 2
 dkredo test3 +bogus
 echo $?  # 2
 ```
+
+## Results
+
+### Files Created
+- `cmd/dkredo/parse.go` — Parse function, Operation/Config types, parseOps helper
+- `cmd/dkredo/parse_test.go` — 8 parser tests
+- `cmd/dkredo/execute.go` — Execute function, runOp dispatcher
+- `cmd/dkredo/execute_test.go` — 5 executor tests including pipeline persistence
+- `cmd/dkredo/main.go` — CLI entry point with flag handling
+
+### Deviations
+None. Pipeline correctly breaks on non-zero exit but always writes modified state.

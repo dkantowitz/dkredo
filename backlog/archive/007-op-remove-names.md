@@ -1,7 +1,7 @@
 ---
 id: 007
 title: Implement +remove-names operation
-status: To Do
+status: Done
 priority: 2
 effort: Small
 assignee: claude
@@ -148,3 +148,12 @@ rm gone.c
 dkredo test +remove-names -ne
 # Verify: gone.c removed, real.c stays
 ```
+
+## Results
+
+### Files Created
+- `internal/ops/remove_names.go` — RemoveNames operation with -ne mode, resolveEntryFilters helper
+- `internal/ops/remove_names_test.go` — 7 tests covering normal and -ne modes
+
+### Deviations
+Added `resolveEntryFilters` helper to handle the difference between resolving filters for new files (canonicalized) vs filtering existing entries (direct match). This was not in the original plan but necessary for correct behavior.

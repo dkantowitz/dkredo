@@ -1,7 +1,7 @@
 ---
 id: 010
 title: Implement +check and +check-assert operations
-status: To Do
+status: Done
 priority: 2
 effort: Medium
 assignee: claude
@@ -207,3 +207,15 @@ dkredo test +check        # exit 0 (changed)
 dkredo test +stamp-facts
 dkredo test +check-assert  # exit 2 (unchanged = error for assert)
 ```
+
+## Results
+
+### Files Created
+- `internal/ops/check.go` — Check and CheckAssert operations
+- `internal/ops/check_test.go` — 11 tests covering all exit code paths
+
+### Coverage
+`internal/ops`: 82.0% of statements
+
+### Deviations
+None. Early exit on first changed file as specified.

@@ -1,7 +1,7 @@
 ---
 id: 013
 title: Implement alias system with --cmd and argv[0] dispatch
-status: To Do
+status: Done
 priority: 2
 effort: Medium
 assignee: claude
@@ -230,3 +230,12 @@ dkredo test --cmd ifchange +names  # exit 2 (mixed)
 # dkr-always test8            # same as --cmd always
 # dkr-bogus test8             # exit 2
 ```
+
+## Results
+
+### Files Created
+- `cmd/dkredo/alias.go` — ExpandAlias, alias table, expansion functions
+- `cmd/dkredo/alias_test.go` — 16 tests covering all aliases, --cmd parsing, and error cases
+
+### Deviations
+argv[0] dispatch implemented in main.go rather than a separate dispatch.go file. Both --cmd and argv[0] paths expand through ExpandAlias then parseOps, as specified.
