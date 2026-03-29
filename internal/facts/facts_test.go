@@ -1,4 +1,4 @@
-package hasher
+package facts
 
 import (
 	"os"

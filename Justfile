@@ -24,6 +24,16 @@ test-all: test test-integration
 _latest-version:
     @git tag -l 'v*' --sort=-v:refname | head -1 | grep . || echo "v0.0.0"
 
+# Tag and push an arbitrary version (e.g. just release 0.2-beta1)
+release version: test
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tag="v{{version}}"
+    echo "Releasing $tag"
+    git tag -a "$tag" -m "Release $tag"
+    git push origin "$tag"
+    echo "Pushed tag $tag — release workflow will build and publish"
+
 # Bump minor version and push tag (v0.1.0 → v0.2.0)
 release-minor: test
     #!/usr/bin/env bash

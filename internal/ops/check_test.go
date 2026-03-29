@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"dkredo/internal/hasher"
+	"dkredo/internal/facts"
 	"dkredo/internal/stamp"
 )
 
@@ -25,9 +25,9 @@ func TestCheckAllFactsMatch(t *testing.T) {
 	f := filepath.Join(dir, "a.c")
 	os.WriteFile(f, []byte("hello"), 0644)
 
-	facts, _ := hasher.FileFacts(f)
+	factsStr, _ := facts.FileFacts(f)
 	state := stamp.NewStampState("test")
-	state.AddEntry("a.c", facts)
+	state.AddEntry("a.c", factsStr)
 
 	code, err := Check(state, []string{}, nil, dir, false)
 	if err != nil {
@@ -43,9 +43,9 @@ func TestCheckContentChanged(t *testing.T) {
 	f := filepath.Join(dir, "a.c")
 	os.WriteFile(f, []byte("hello"), 0644)
 
-	facts, _ := hasher.FileFacts(f)
+	factsStr, _ := facts.FileFacts(f)
 	state := stamp.NewStampState("test")
-	state.AddEntry("a.c", facts)
+	state.AddEntry("a.c", factsStr)
 
 	os.WriteFile(f, []byte("world"), 0644) // same size, different content
 
@@ -63,9 +63,9 @@ func TestCheckSizeChanged(t *testing.T) {
 	f := filepath.Join(dir, "a.c")
 	os.WriteFile(f, []byte("hi"), 0644)
 
-	facts, _ := hasher.FileFacts(f)
+	factsStr, _ := facts.FileFacts(f)
 	state := stamp.NewStampState("test")
-	state.AddEntry("a.c", facts)
+	state.AddEntry("a.c", factsStr)
 
 	os.WriteFile(f, []byte("hello world longer"), 0644)
 
@@ -100,9 +100,9 @@ func TestCheckFileDisappeared(t *testing.T) {
 	f := filepath.Join(dir, "a.c")
 	os.WriteFile(f, []byte("hello"), 0644)
 
-	facts, _ := hasher.FileFacts(f)
+	factsStr, _ := facts.FileFacts(f)
 	state := stamp.NewStampState("test")
-	state.AddEntry("a.c", facts)
+	state.AddEntry("a.c", factsStr)
 
 	os.Remove(f)
 
@@ -149,10 +149,10 @@ func TestCheckWithFilter(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "a.c"), []byte("hello"), 0644)
 	os.WriteFile(filepath.Join(dir, "b.h"), []byte("world"), 0644)
 
-	factsH, _ := hasher.FileFacts(filepath.Join(dir, "b.h"))
+	factsStr, _ := facts.FileFacts(filepath.Join(dir, "b.h"))
 	state := stamp.NewStampState("test")
 	state.AddEntry("a.c", "") // no facts → would be "changed"
-	state.AddEntry("b.h", factsH)
+	state.AddEntry("b.h", factsStr)
 
 	// Check only .h → should be unchanged
 	code, err := Check(state, []string{".h"}, nil, dir, false)
@@ -182,9 +182,9 @@ func TestCheckAssertUnchanged(t *testing.T) {
 	f := filepath.Join(dir, "a.c")
 	os.WriteFile(f, []byte("hello"), 0644)
 
-	facts, _ := hasher.FileFacts(f)
+	factsStr, _ := facts.FileFacts(f)
 	state := stamp.NewStampState("test")
-	state.AddEntry("a.c", facts)
+	state.AddEntry("a.c", factsStr)
 
 	code, err := CheckAssert(state, []string{}, nil, dir, false)
 	if err != nil {

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"dkredo/internal/hasher"
+	"dkredo/internal/facts"
 	"dkredo/internal/resolve"
 	"dkredo/internal/stamp"
 )
@@ -30,7 +30,7 @@ func Check(state *stamp.StampState, args []string, stdin io.Reader, stampsParent
 
 	for _, m := range matching {
 		fullPath := filepath.Join(stampsParent, m.Path)
-		changed, reason, err := hasher.CheckFact(fullPath, m.Facts)
+		changed, reason, err := facts.CheckFact(fullPath, m.Facts)
 		if err != nil {
 			return 2, fmt.Errorf("+check: %w", err)
 		}
