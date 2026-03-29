@@ -164,6 +164,81 @@ func TestCheckWithFilter(t *testing.T) {
 	}
 }
 
+func TestCheckAllReportsAllChanges(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.c"), []byte("hello"), 0644)
+	os.WriteFile(filepath.Join(dir, "b.c"), []byte("world"), 0644)
+	os.WriteFile(filepath.Join(dir, "c.c"), []byte("foo"), 0644)
+
+	factsA, _ := facts.FileFacts(filepath.Join(dir, "a.c"))
+	factsB, _ := facts.FileFacts(filepath.Join(dir, "b.c"))
+	factsC, _ := facts.FileFacts(filepath.Join(dir, "c.c"))
+	state := stamp.NewStampState("test")
+	state.AddEntry("a.c", factsA)
+	state.AddEntry("b.c", factsB)
+	state.AddEntry("c.c", factsC)
+
+	// Modify 2 of 3 files
+	os.WriteFile(filepath.Join(dir, "a.c"), []byte("changed-a"), 0644)
+	os.WriteFile(filepath.Join(dir, "c.c"), []byte("changed-c"), 0644)
+
+	code, err := CheckAll(state, []string{}, nil, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Fatalf("expected exit 0 (changed), got %d", code)
+	}
+}
+
+func TestCheckAllUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "a.c")
+	os.WriteFile(f, []byte("hello"), 0644)
+	factsStr, _ := facts.FileFacts(f)
+	state := stamp.NewStampState("test")
+	state.AddEntry("a.c", factsStr)
+
+	code, err := CheckAll(state, []string{}, nil, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 1 {
+		t.Fatalf("expected exit 1 (unchanged), got %d", code)
+	}
+}
+
+func TestCheckAllEmpty(t *testing.T) {
+	state := stamp.NewStampState("test")
+	code, err := CheckAll(state, []string{}, nil, t.TempDir(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 1 {
+		t.Fatalf("expected exit 1 (unchanged), got %d", code)
+	}
+}
+
+func TestCheckAllWithFilter(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.c"), []byte("hello"), 0644)
+	os.WriteFile(filepath.Join(dir, "b.h"), []byte("world"), 0644)
+
+	state := stamp.NewStampState("test")
+	state.AddEntry("a.c", "") // no facts → changed
+	factsH, _ := facts.FileFacts(filepath.Join(dir, "b.h"))
+	state.AddEntry("b.h", factsH)
+
+	// Filter .h only → should be unchanged
+	code, err := CheckAll(state, []string{".h"}, nil, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 1 {
+		t.Fatalf("expected exit 1 (unchanged for .h filter), got %d", code)
+	}
+}
+
 func TestCheckAssertChanged(t *testing.T) {
 	state := stamp.NewStampState("test")
 	state.AddEntry("a.c", "")

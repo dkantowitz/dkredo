@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseLabel(t *testing.T) {
 	_, label, ops, err := Parse([]string{"my-label", "+add-names", "a.c", "b.c"})
@@ -58,11 +61,11 @@ func TestParseUnknownOp(t *testing.T) {
 }
 
 func TestParseGlobalFlags(t *testing.T) {
-	cfg, label, ops, err := Parse([]string{"-v", "label", "+check"})
+	flags, label, ops, err := Parse([]string{"-v", "label", "+check"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.Verbose {
+	if !flags.Verbose {
 		t.Fatal("verbose should be true")
 	}
 	if label != "label" {
@@ -74,15 +77,25 @@ func TestParseGlobalFlags(t *testing.T) {
 }
 
 func TestParseStampsDir(t *testing.T) {
-	cfg, label, _, err := Parse([]string{"--stamps-dir", "/tmp/s", "label", "+check"})
+	flags, label, _, err := Parse([]string{"--stamps-dir", "/tmp/s", "label", "+check"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.StampsDir != "/tmp/s" {
-		t.Fatalf("stamps dir = %q", cfg.StampsDir)
+	if flags.StampsDir != "/tmp/s" {
+		t.Fatalf("stamps dir = %q", flags.StampsDir)
 	}
 	if label != "label" {
 		t.Fatalf("label = %q", label)
+	}
+}
+
+func TestParseMissingLabelWithOperation(t *testing.T) {
+	_, _, _, err := Parse([]string{"+add-names", "a.c"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "missing label") {
+		t.Fatalf("expected 'missing label' error, got: %v", err)
 	}
 }
 
@@ -97,5 +110,97 @@ func TestParseNonOpArgAfterLabel(t *testing.T) {
 	_, _, _, err := Parse([]string{"label", "notanop"})
 	if err == nil {
 		t.Fatal("expected error for non-op arg after label")
+	}
+}
+
+// --- ExtractFlags tests ---
+
+func TestExtractFlagsVerbose(t *testing.T) {
+	f := Flags{}
+	remaining := ExtractFlags(&f, []string{"-v", "a.c", "b.c"})
+	if !f.Verbose {
+		t.Fatal("expected verbose")
+	}
+	if len(remaining) != 2 || remaining[0] != "a.c" || remaining[1] != "b.c" {
+		t.Fatalf("remaining = %v", remaining)
+	}
+}
+
+func TestExtractFlagsStampsDir(t *testing.T) {
+	f := Flags{}
+	remaining := ExtractFlags(&f, []string{"--stamps-dir", "/tmp/s", "a.c"})
+	if f.StampsDir != "/tmp/s" {
+		t.Fatalf("stamps dir = %q", f.StampsDir)
+	}
+	if len(remaining) != 1 || remaining[0] != "a.c" {
+		t.Fatalf("remaining = %v", remaining)
+	}
+}
+
+func TestExtractFlagsNoFlags(t *testing.T) {
+	f := Flags{Verbose: true}
+	remaining := ExtractFlags(&f, []string{"a.c", ".c"})
+	if !f.Verbose {
+		t.Fatal("verbose should be preserved")
+	}
+	if len(remaining) != 2 {
+		t.Fatalf("remaining = %v", remaining)
+	}
+}
+
+func TestExtractFlagsEmpty(t *testing.T) {
+	f := Flags{}
+	remaining := ExtractFlags(&f, []string{})
+	if remaining != nil {
+		t.Fatalf("remaining = %v", remaining)
+	}
+}
+
+func TestOperationLocalVerbose(t *testing.T) {
+	// Parse: label +check -v
+	_, _, ops, err := Parse([]string{"label", "+check", "-v"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ops) != 1 {
+		t.Fatalf("ops = %d", len(ops))
+	}
+	// After parse, -v is still in the args (extraction happens at execute time)
+	found := false
+	for _, a := range ops[0].Args {
+		if a == "-v" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("-v should be in check args")
+	}
+}
+
+func TestOperationLocalDoesNotLeakToNext(t *testing.T) {
+	// Parse: label +check -v +stamp-facts
+	// -v should be in check's args, not stamp-facts'
+	_, _, ops, err := Parse([]string{"label", "+check", "-v", "+stamp-facts"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ops) != 2 {
+		t.Fatalf("ops = %d", len(ops))
+	}
+	// -v in check args
+	found := false
+	for _, a := range ops[0].Args {
+		if a == "-v" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("-v should be in check args")
+	}
+	// no -v in stamp-facts args
+	for _, a := range ops[1].Args {
+		if a == "-v" {
+			t.Fatal("-v should not be in stamp-facts args")
+		}
 	}
 }

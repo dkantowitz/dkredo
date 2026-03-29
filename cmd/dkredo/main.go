@@ -58,12 +58,12 @@ func main() {
 		aliasName := strings.TrimPrefix(argv0, "dkr-")
 
 		// Parse global flags from front of args
-		cfg := Config{}
+		flags := Flags{}
 		i := 0
 		for i < len(args) {
 			switch args[i] {
 			case "-v":
-				cfg.Verbose = true
+				flags.Verbose = true
 				i++
 			case "--stamps-dir":
 				i++
@@ -71,7 +71,7 @@ func main() {
 					fmt.Fprintf(os.Stderr, "error: --stamps-dir requires an argument\n")
 					os.Exit(2)
 				}
-				cfg.StampsDir = args[i]
+				flags.StampsDir = args[i]
 				i++
 			default:
 				goto aliasLabel
@@ -99,12 +99,12 @@ func main() {
 			os.Exit(2)
 		}
 
-		stampsDir := resolveStampsDir(cfg.StampsDir)
-		exitCode := Execute(label, ops, stampsDir, cfg.Verbose, os.Stdin, os.Stdout)
+		flags.StampsDir = resolveStampsDir(flags.StampsDir)
+		exitCode := Execute(label, ops, flags, os.Stdin, os.Stdout)
 		os.Exit(exitCode)
 	}
 
-	cfg, label, operations, err := Parse(args)
+	flags, label, operations, err := Parse(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(2)
@@ -116,8 +116,8 @@ func main() {
 		os.Exit(2)
 	}
 
-	stampsDir := resolveStampsDir(cfg.StampsDir)
-	exitCode := Execute(label, operations, stampsDir, cfg.Verbose, os.Stdin, os.Stdout)
+	flags.StampsDir = resolveStampsDir(flags.StampsDir)
+	exitCode := Execute(label, operations, flags, os.Stdin, os.Stdout)
 	os.Exit(exitCode)
 }
 
@@ -138,37 +138,39 @@ func resolveStampsDir(override string) string {
 }
 
 func printShortHelp() {
-	fmt.Fprintf(os.Stderr, `Usage: dkredo [flags] <label> [+operation [args...]]...
+	fmt.Fprintf(os.Stderr, `Usage: dkredo [flags] <label> [+operation [flags] [args...]]...
 
 Flags:
-  -v               Verbose output
-  --stamps-dir D   Override .stamps/ directory
-  --version        Print version
+  --cmd ALIAS      Expand a built-in alias (ifchange, stamp, always, fnames)
   --help           Full help
   -h               Short help
-  --cmd ALIAS      Expand built-in alias
+  --install DIR    Copy binary and symlinks to DIR
+  --stamps-dir D   Override .stamps/ directory [global, operations]
+  --version        Print version
+  -v               Verbose output [global, operations]
 
 Operations: +add-names, +remove-names, +stamp-facts, +clear-facts,
-            +check, +check-assert, +names, +facts
+            +check, +check-all, +check-assert, +names, +facts
 `)
 }
 
 func printFullHelp() {
 	fmt.Printf(`dkredo — composable file change detection
 
-Usage: dkredo [flags] <label> [+operation [args...]]...
+Usage: dkredo [flags] <label> [+operation [flags] [args...]]...
 
 Operations execute left to right on a single label's stamp file.
 
 FLAGS
-  -v                 Verbose output to stderr
-  --stamps-dir DIR   Override .stamps/ directory location
-  --version          Print version and exit
-  --help             Show this help
-  -h                 Show short help
-  --cmd ALIAS        Expand a built-in alias (ifchange, stamp, always, fnames)
-  --install DIR      Install binary and symlinks to DIR
+  --cmd ALIAS      Expand a built-in alias (ifchange, stamp, always, fnames)
+  --help           Full help
+  -h               Short help
+  --install DIR    Copy binary and symlinks to DIR
+  --stamps-dir D   Override .stamps/ directory [global, operations]
+  --version        Print version
+  -v               Verbose output [global, operations]
 
+  
 STAMP MANIPULATION
   +add-names [files...]          Add files to stamp's name list
   +remove-names [filters...]     Remove matching entries (empty = all)
@@ -183,6 +185,7 @@ QUERYING
 
 VERIFYING
   +check [filters...]            Exit 0=changed, 1=unchanged, 2=error
+  +check-all [filters...]        Like +check but verifies all entries, not just first
   +check-assert [filters...]     Like +check but exit 2 when unchanged
 
 INPUT MODES (for file arguments)

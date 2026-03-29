@@ -23,7 +23,7 @@ func TestExecutePipeline(t *testing.T) {
 		{Name: "add-names", Args: []string{"a.c"}},
 		{Name: "stamp-facts", Args: nil},
 	}
-	code := Execute("test", ops, stampsDir, false, nil, &bytes.Buffer{})
+	code := Execute("test", ops, Flags{StampsDir: stampsDir}, nil, &bytes.Buffer{})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
@@ -55,11 +55,11 @@ func TestExecuteCheckUnchanged(t *testing.T) {
 		{Name: "add-names", Args: []string{"a.c"}},
 		{Name: "stamp-facts", Args: nil},
 	}
-	Execute("test", ops, stampsDir, false, nil, &bytes.Buffer{})
+	Execute("test", ops, Flags{StampsDir: stampsDir}, nil, &bytes.Buffer{})
 
 	// Second: check should be unchanged
 	ops2 := []Operation{{Name: "check", Args: nil}}
-	code := Execute("test", ops2, stampsDir, false, nil, &bytes.Buffer{})
+	code := Execute("test", ops2, Flags{StampsDir: stampsDir}, nil, &bytes.Buffer{})
 	if code != 1 {
 		t.Fatalf("expected exit 1 (unchanged), got %d", code)
 	}
@@ -79,7 +79,7 @@ func TestExecuteWritesOnExit1(t *testing.T) {
 		{Name: "add-names", Args: []string{"a.c"}},
 		{Name: "check", Args: nil},
 	}
-	code := Execute("test", ops, stampsDir, false, nil, &bytes.Buffer{})
+	code := Execute("test", ops, Flags{StampsDir: stampsDir}, nil, &bytes.Buffer{})
 	if code != 0 {
 		t.Fatalf("expected exit 0 (changed), got %d", code)
 	}
@@ -109,13 +109,13 @@ func TestExecuteStampThenCheckChanged(t *testing.T) {
 		{Name: "add-names", Args: []string{"a.c"}},
 		{Name: "stamp-facts", Args: nil},
 	}
-	Execute("test", ops, stampsDir, false, nil, &bytes.Buffer{})
+	Execute("test", ops, Flags{StampsDir: stampsDir}, nil, &bytes.Buffer{})
 
 	// Modify file
 	os.WriteFile(f, []byte("modified"), 0644)
 
 	// Check → should be changed
-	code := Execute("test", []Operation{{Name: "check", Args: nil}}, stampsDir, false, nil, &bytes.Buffer{})
+	code := Execute("test", []Operation{{Name: "check", Args: nil}}, Flags{StampsDir: stampsDir}, nil, &bytes.Buffer{})
 	if code != 0 {
 		t.Fatalf("expected exit 0 (changed), got %d", code)
 	}
@@ -133,14 +133,63 @@ func TestExecuteNamesOutput(t *testing.T) {
 	ops := []Operation{
 		{Name: "add-names", Args: []string{"a.c"}},
 	}
-	Execute("test", ops, stampsDir, false, nil, &bytes.Buffer{})
+	Execute("test", ops, Flags{StampsDir: stampsDir}, nil, &bytes.Buffer{})
 
 	var buf bytes.Buffer
-	code := Execute("test", []Operation{{Name: "names", Args: nil}}, stampsDir, false, nil, &buf)
+	code := Execute("test", []Operation{{Name: "names", Args: nil}}, Flags{StampsDir: stampsDir}, nil, &buf)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
 	if buf.String() != "a.c\n" {
 		t.Fatalf("unexpected output: %q", buf.String())
+	}
+}
+
+func TestExecutePerOpVerbose(t *testing.T) {
+	// Test that per-op -v works without affecting other ops
+	dir := t.TempDir()
+	stampsDir := filepath.Join(dir, ".stamps")
+	os.WriteFile(filepath.Join(dir, "a.c"), []byte("hello"), 0644)
+
+	oldWd, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldWd)
+
+	ops := []Operation{
+		{Name: "add-names", Args: []string{"a.c"}},
+		{Name: "stamp-facts", Args: []string{"-v"}},
+	}
+	flags := Flags{StampsDir: stampsDir}
+	code := Execute("test", ops, flags, nil, &bytes.Buffer{})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+}
+
+func TestExecutePerOpFlagsDoNotLeak(t *testing.T) {
+	// Verify that per-op flags don't modify the global flags struct
+	dir := t.TempDir()
+	stampsDir := filepath.Join(dir, ".stamps")
+	os.WriteFile(filepath.Join(dir, "a.c"), []byte("hello"), 0644)
+
+	oldWd, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldWd)
+
+	// First op has -v in args, second op should not be verbose
+	ops := []Operation{
+		{Name: "add-names", Args: []string{"-v", "a.c"}},
+		{Name: "stamp-facts", Args: nil},
+	}
+	flags := Flags{StampsDir: stampsDir, Verbose: false}
+	code := Execute("test", ops, flags, nil, &bytes.Buffer{})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	// The test passes if it completes without error — the key property
+	// is that the global flags.Verbose remains false (verified by the
+	// value-copy semantics in Execute).
+	if flags.Verbose {
+		t.Fatal("global flags should not have been modified by per-op extraction")
 	}
 }

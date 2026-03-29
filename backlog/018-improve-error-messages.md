@@ -1,7 +1,7 @@
 ---
 id: 018
 title: Improve error messages
-status: To Do
+status: Done
 priority: 3
 effort: Trivial
 assignee: claude
@@ -79,3 +79,27 @@ the label, before parsing operations.
 
 Verify the error message is clear when combined with argv[0] alias dispatch
 (e.g., `dkr-ifchange +add-names` should also produce a helpful message).
+
+## Results
+
+Implemented as planned with no deviations from the TDD plan.
+
+- Added `strings.HasPrefix(label, "+")` check in `Parse()` after extracting the label (line 62 of `cmd/dkredo/parse.go`)
+- When triggered, returns error: `missing label — first argument "+add-names" looks like an operation, not a label`
+- Added `TestParseMissingLabelWithOperation` test in `cmd/dkredo/parse_test.go`
+- All existing tests continue to pass (`go test ./...` green across all packages)
+
+### Files modified
+
+- `cmd/dkredo/parse.go` — Added label prefix check
+- `cmd/dkredo/parse_test.go` — Added test and `strings` import
+- `backlog/018-improve-error-messages.md` — Updated status and added results
+
+### Review notes
+
+Reviewed 2026-03-28. Implementation matches the ticket spec exactly:
+- `strings.HasPrefix(label, "+")` check is in the correct location (after label extraction, before operation parsing)
+- Error message satisfies all three requirements: contains "missing label", shows the offending argument via `%q`, and includes a usage hint
+- `TestParseMissingLabelWithOperation` test correctly validates the error path
+- All tests pass (`go test ./...` green across all 5 packages)
+- No issues found; no changes needed beyond setting status to Done
