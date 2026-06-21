@@ -1,11 +1,11 @@
 # dkredo
 
-Content-hash change detection for [just](https://github.com/casey/just) recipes.
+Content-hash change detection for [just](https://github.com/casey/just)  and shell build recipes.
 
 ## Why?
 
 `just` runs recipes but doesn't track whether inputs changed.
-`make` is fifty years old and awkward for most scripting tasks.
+`make` is old and awkward for most scripting tasks.
 `redo` is simple, but it replaces the familiar makefile-style workflow.
 
 dkredo adds redo-inspired **file content-hash guards** to justfile recipes: make-like syntax, redo-like simplicity.
@@ -37,7 +37,7 @@ dkredo also works well in simple shell build scripts:
 set -euo pipefail
 
 # compile
-dkr-ifchange build.out src/main.c src/util.c || exit 0
+dkr-ifchange build.out src/main.c src/util.c || {echo "build.out up date date" ; exit 0; }
 gcc -o build.out src/main.c src/util.c
 dkr-stamp build.out
 
