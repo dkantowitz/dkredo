@@ -28,6 +28,25 @@ clean:
 
 That's the whole idea. No `.do` scripts, no build orchestrator — justfile recipes _are_ the makefile.
 
+### Plain shell script examples
+
+dkredo also works well in simple shell build scripts:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# compile
+dkr-ifchange build.out src/main.c src/util.c || exit 0
+gcc -o build.out src/main.c src/util.c
+dkr-stamp build.out
+
+# package
+dkr-ifchange release.tar.gz build.out README.md || exit 0
+tar -czf release.tar.gz build.out README.md
+dkr-stamp release.tar.gz
+```
+
 ### Composable operations
 
 The alias commands above (`dkr-ifchange`, `dkr-stamp`, `dkr-always`) are
